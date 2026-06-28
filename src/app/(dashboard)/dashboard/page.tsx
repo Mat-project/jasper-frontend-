@@ -35,7 +35,7 @@ export default function DashboardPage() {
   }, []);
 
   const totalEmployees = employees.length;
-  const activeProjects = projects.filter((p) => p.status === "In Progress").length;
+  const activeProjects = projects.filter((p) => p.status === "Active").length;
 
   const totalTonnageApproved = production
     .filter((e) => e.status === "Approved")
@@ -167,7 +167,7 @@ export default function DashboardPage() {
                   <div className="text-xs font-bold text-foreground">{p.name}</div>
                   <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">{p.code} • {p.client}</div>
                 </div>
-                <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded border border-border/60", p.status === "In Progress" && "bg-blue-500/10 text-blue-400", p.status === "Not Started" && "bg-slate-500/10 text-slate-400", p.status === "Completed" && "bg-emerald-500/10 text-emerald-400")}>{p.status}</span>
+                <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded border border-border/60", p.status === "Active" && "bg-blue-500/10 text-blue-400", p.status === "Planned" && "bg-slate-500/10 text-slate-400", p.status === "Completed" && "bg-emerald-500/10 text-emerald-400")}>{p.status}</span>
               </div>
             ))}
           </div>

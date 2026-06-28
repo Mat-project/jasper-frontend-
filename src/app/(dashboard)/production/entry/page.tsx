@@ -28,7 +28,7 @@ export default function ProductionEntryPage() {
 
   useEffect(() => {
     const activeEmps = mockService.getEmployees().filter((e) => e.is_active);
-    const activeProjs = mockService.getProjects().filter((p) => p.status === "In Progress" || p.status === "Not Started");
+    const activeProjs = mockService.getProjects().filter((p) => p.status === "Active" || p.status === "Planned");
     
     setEmployees(activeEmps);
     setProjects(activeProjs);

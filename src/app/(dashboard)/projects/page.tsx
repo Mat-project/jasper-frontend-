@@ -1,649 +1,712 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
-import { Dialog } from "@/components/layout/Dialog";
-import { Project } from "@/types/projects";
-import { User } from "@/types/user";
+import React, { useState } from "react";
 import {
   FolderKanban,
+  Building2,
+  DollarSign,
+  Users,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
   Plus,
   Search,
-  Eye,
-  Edit2,
-  Users,
-  Calendar,
-  Building2,
-  AlertCircle,
-  X,
+  Filter,
+  TrendingUp,
+  Briefcase,
+  ChevronRight,
   UserPlus,
+  Calendar,
+  X,
+  Edit3,
+  Trash2,
+  ShieldAlert,
 } from "lucide-react";
+import {
+  ENTERPRISE_EMPLOYEES,
+  ENTERPRISE_PROJECTS,
+  ENTERPRISE_ASSIGNMENTS,
+  EnterpriseProject,
+  EnterpriseAssignment,
+} from "@/data/mockEnterpriseData";
 import { cn } from "@/lib/utils";
 
-export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [employees, setEmployees] = useState<User[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
-
-  // Search & Status tabs
+export default function EnterpriseProjectsPage() {
+  const [projects, setProjects] = useState<EnterpriseProject[]>(ENTERPRISE_PROJECTS);
+  const [assignments, setAssignments] = useState<EnterpriseAssignment[]>(ENTERPRISE_ASSIGNMENTS);
+  const [activeTab, setActiveTab] = useState<"portfolio" | "resource_matrix" | "milestones">("portfolio");
+  
+  // Search & Filter
   const [search, setSearch] = useState("");
-  const [statusTab, setStatusTab] = useState<"All" | "Not Started" | "In Progress" | "On Hold" | "Completed">("All");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
 
-  // Dialog states
+  // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [selectedProj, setSelectedProj] = useState<Project | null>(null);
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [selectedProj, setSelectedProj] = useState<EnterpriseProject | null>(null);
 
   // Form states
-  const [form, setForm] = useState({
+  const [addForm, setAddForm] = useState({
     code: "",
     name: "",
     client: "",
-    start_date: "",
-    end_date: "",
-    status: "Not Started" as Project["status"],
+    budget: 500000,
+    start_date: "2026-07-01",
+    end_date: "2026-12-31",
+    priority: "High" as EnterpriseProject["priority"],
   });
-  const [assignForm, setAssignForm] = useState({ employee_id: "" });
-  const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const [assignForm, setAssignForm] = useState({
+    employee_id: "",
+    role: "Structural Detailer" as EnterpriseAssignment["role"],
+    allocation_percentage: 50,
+  });
 
-  const loadData = () => {
-    setProjects(mockService.getProjects());
-    setEmployees(mockService.getEmployees().filter((e) => e.is_active));
-    setAssignments(mockService.getProjectAssignments());
-  };
+  // KPI Calculations
+  const totalProjects = projects.length;
+  const activeCount = projects.filter((p) => p.status === "Active").length;
+  const atRiskCount = projects.filter((p) => p.status === "At Risk").length;
+  const totalBudget = projects.reduce((sum, p) => sum + p.budget, 0);
+  const totalSpent = projects.reduce((sum, p) => sum + p.spent, 0);
 
-  const handleOpenAdd = () => {
-    setForm({
-      code: "",
-      name: "",
-      client: "",
-      start_date: "",
-      end_date: "",
-      status: "Not Started",
-    });
-    setFormError(null);
-    setIsAddOpen(true);
-  };
+  // Filtered list
+  const filteredProjects = projects.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.code.toLowerCase().includes(search.toLowerCase()) ||
+      p.client.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || p.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesPriority = priorityFilter === "all" || p.priority.toLowerCase() === priorityFilter.toLowerCase();
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
 
-  const handleOpenEdit = (p: Project) => {
-    setSelectedProj(p);
-    setForm({
-      code: p.code,
-      name: p.name,
-      client: p.client,
-      start_date: p.start_date,
-      end_date: p.end_date,
-      status: p.status,
-    });
-    setFormError(null);
-    setIsEditOpen(true);
-  };
+  // Calculate workloads per employee
+  const employeeWorkloads = ENTERPRISE_EMPLOYEES.map((emp) => {
+    const empAssigns = assignments.filter((a) => a.employee_id === emp.id);
+    const totalAlloc = empAssigns.reduce((sum, a) => sum + a.allocation_percentage, 0);
+    return {
+      employee: emp,
+      assignments: empAssigns,
+      totalAlloc,
+    };
+  });
 
-  const handleOpenDetails = (p: Project) => {
-    setSelectedProj(p);
-    setAssignForm({ employee_id: "" });
-    setFormError(null);
-    setIsDetailsOpen(true);
-  };
-
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddProject = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.code || !form.name || !form.client || !form.start_date || !form.end_date) {
-      setFormError("All fields are required.");
-      return;
-    }
-    mockService.createProject(form);
+    if (!addForm.code || !addForm.name || !addForm.client) return;
+    const newProj: EnterpriseProject = {
+      id: `prj-${Date.now()}`,
+      code: addForm.code,
+      name: addForm.name,
+      client: addForm.client,
+      budget: Number(addForm.budget),
+      spent: 0,
+      start_date: addForm.start_date,
+      end_date: addForm.end_date,
+      status: "Active",
+      priority: addForm.priority,
+      progress: 0,
+      milestones: [
+        { id: `m-${Date.now()}`, name: "Kickoff & Design Basis", due_date: addForm.start_date, is_completed: true },
+      ],
+      tasks: { total: 10, completed: 0, in_progress: 2, pending: 8 },
+    };
+    setProjects([newProj, ...projects]);
     setIsAddOpen(false);
-    loadData();
-  };
-
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProj) return;
-    if (!form.code || !form.name || !form.client || !form.start_date || !form.end_date) {
-      setFormError("All fields are required.");
-      return;
-    }
-    mockService.updateProject(selectedProj.id, form);
-    setIsEditOpen(false);
-    loadData();
-    // Sync selected project in details dialog if open
-    if (isDetailsOpen) {
-      setSelectedProj({ ...selectedProj, ...form });
-    }
+    setAddForm({ code: "", name: "", client: "", budget: 500000, start_date: "2026-07-01", end_date: "2026-12-31", priority: "High" });
   };
 
   const handleAssignSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProj || !assignForm.employee_id) return;
-    mockService.assignEmployeeToProject(selectedProj.id, assignForm.employee_id);
-    setAssignForm({ employee_id: "" });
-    loadData();
+    const newAssign: EnterpriseAssignment = {
+      id: `asg-${Date.now()}`,
+      project_id: selectedProj.id,
+      employee_id: assignForm.employee_id,
+      role: assignForm.role,
+      allocation_percentage: Number(assignForm.allocation_percentage),
+      assigned_date: new Date().toISOString().split("T")[0],
+    };
+    setAssignments([...assignments, newAssign]);
+    setIsAssignOpen(false);
+    setAssignForm({ employee_id: "", role: "Structural Detailer", allocation_percentage: 50 });
   };
 
-  const handleRemoveAssignment = (assignId: string) => {
-    mockService.unassignEmployeeFromProject(assignId);
-    loadData();
-  };
-
-  // Filter project list
-  const filteredProjects = projects.filter((p) => {
-    const matchesSearch =
-      p.code.toLowerCase().includes(search.toLowerCase()) ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.client.toLowerCase().includes(search.toLowerCase());
-
-    const matchesStatus = statusTab === "All" || p.status === statusTab;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  const getAssignedTeam = (projId: string) => {
-    return assignments
-      .filter((a) => a.project_id === projId)
-      .map((a) => {
-        const emp = employees.find((e) => e.id === a.employee_id);
-        return {
-          assignmentId: a.id,
-          employee: emp,
-        };
+  const handleToggleMilestone = (projId: string, milestoneId: string) => {
+    setProjects(
+      projects.map((p) => {
+        if (p.id === projId) {
+          const updatedMilestones = p.milestones.map((m) =>
+            m.id === milestoneId ? { ...m, is_completed: !m.is_completed } : m
+          );
+          return { ...p, milestones: updatedMilestones };
+        }
+        return p;
       })
-      .filter((a) => a.employee !== undefined);
+    );
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-5 p-1">
+      {/* Page Header / Breadcrumbs */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Projects Management</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create projects, assign teams, and track structural detail schedules.
-          </p>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium mb-1">
+            <span>Enterprise HRMS</span>
+            <ChevronRight className="h-3 w-3" />
+            <span className="text-foreground font-semibold">Project Management Portfolio</span>
+          </div>
+          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
+            <FolderKanban className="h-5 w-5 text-brand-400" /> Projects & Resource Capacity Matrix
+          </h1>
         </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="px-3.5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-brand-500/20 transition-all"
+          >
+            <Plus className="h-4 w-4" /> Create Project
+          </button>
+        </div>
+      </div>
+
+      {/* Executive Analytics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">Active Portfolio</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-bold text-slate-100">{activeCount}</span>
+              <span className="text-xs text-slate-400">/ {totalProjects} Projects</span>
+            </div>
+          </div>
+          <div className="p-2.5 bg-blue-500/10 rounded-lg text-blue-400 border border-blue-500/20">
+            <Briefcase className="h-5 w-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">Schedule Risk</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-bold text-amber-400">{atRiskCount}</span>
+              <span className="text-xs text-amber-500/80 font-semibold">Delayed/At Risk</span>
+            </div>
+          </div>
+          <div className="p-2.5 bg-amber-500/10 rounded-lg text-amber-400 border border-amber-500/20">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">Total Portfolio Budget</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-bold text-slate-100">${(totalBudget / 1000000).toFixed(2)}M</span>
+              <span className="text-xs text-emerald-400 font-medium">Approved</span>
+            </div>
+          </div>
+          <div className="p-2.5 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20">
+            <DollarSign className="h-5 w-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">Budget Utilization</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-bold text-slate-100">{Math.round((totalSpent / totalBudget) * 100)}%</span>
+              <span className="text-xs text-slate-400">${(totalSpent / 1000).toFixed(0)}k spent</span>
+            </div>
+          </div>
+          <div className="p-2.5 bg-brand-500/10 rounded-lg text-brand-400 border border-brand-500/20">
+            <TrendingUp className="h-5 w-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-border/40 pb-1">
         <button
-          onClick={handleOpenAdd}
-          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-medium px-4 py-2.5 rounded-lg shadow-lg hover:shadow-brand-500/20 transition-all duration-150 self-start sm:self-center"
+          onClick={() => setActiveTab("portfolio")}
+          className={cn(
+            "px-4 py-2 text-xs font-semibold rounded-lg transition-all",
+            activeTab === "portfolio"
+              ? "bg-brand-500/15 text-brand-400 border border-brand-500/30"
+              : "text-muted-foreground hover:text-foreground"
+          )}
         >
-          <Plus className="h-4 w-4" />
-          Add Project
+          Project Portfolio ({filteredProjects.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("resource_matrix")}
+          className={cn(
+            "px-4 py-2 text-xs font-semibold rounded-lg transition-all",
+            activeTab === "resource_matrix"
+              ? "bg-brand-500/15 text-brand-400 border border-brand-500/30"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Draftsmen Workload & Capacity Matrix
+        </button>
+        <button
+          onClick={() => setActiveTab("milestones")}
+          className={cn(
+            "px-4 py-2 text-xs font-semibold rounded-lg transition-all",
+            activeTab === "milestones"
+              ? "bg-brand-500/15 text-brand-400 border border-brand-500/30"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Milestones & Critical Checklist
         </button>
       </div>
 
-      {/* Tabs and Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border">
-        {/* Status Tabs */}
-        <div className="flex flex-wrap gap-1.5 bg-background p-1 rounded-lg border border-border self-start">
-          {(["All", "Not Started", "In Progress", "On Hold", "Completed"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setStatusTab(tab)}
-              className={cn(
-                "px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all duration-150",
-                statusTab === tab
-                  ? "bg-slate-800 text-white shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-slate-500/5"
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search code, project, client..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-      </div>
-
-      {/* Project Card List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProjects.length === 0 ? (
-          <div className="col-span-full py-16 text-center text-muted-foreground bg-card rounded-xl border border-border">
-            <div className="flex flex-col items-center justify-center gap-2">
-              <FolderKanban className="h-10 w-10 text-white/20" />
-              <span>No projects found matching the status filter.</span>
+      {/* 1. PORTFOLIO TAB */}
+      {activeTab === "portfolio" && (
+        <div className="space-y-4">
+          {/* Filters Bar */}
+          <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search code, project, or client..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-brand-500"
+              />
             </div>
-          </div>
-        ) : (
-          filteredProjects.map((p) => {
-            const team = getAssignedTeam(p.id);
-            return (
-              <div
-                key={p.id}
-                className="bg-card border border-border hover:border-slate-700/80 hover:shadow-md transition-all duration-200 rounded-xl p-5 flex flex-col justify-between"
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-foreground focus:outline-none focus:border-brand-500"
               >
-                <div>
-                  {/* Status Badge */}
-                  <div className="flex justify-between items-start gap-4">
-                    <span className="text-xs font-mono font-bold text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded">
-                      {p.code}
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border",
-                        p.status === "In Progress" && "bg-blue-500/10 text-blue-400 border-blue-500/20",
-                        p.status === "Not Started" && "bg-slate-500/10 text-slate-400 border-slate-500/20",
-                        p.status === "On Hold" && "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                        p.status === "Completed" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                      )}
-                    >
-                      {p.status}
-                    </span>
-                  </div>
-
-                  {/* Title & Client */}
-                  <h3 className="text-lg font-bold text-foreground mt-3 line-clamp-1">{p.name}</h3>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                    <Building2 className="h-3.5 w-3.5" />
-                    <span>Client: <span className="text-foreground font-medium">{p.client}</span></span>
-                  </div>
-
-                  {/* Date range */}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-3 border-t border-border/60 pt-3">
-                    <Calendar className="h-3.5 w-3.5 text-white/40" />
-                    <span>
-                      {p.start_date} to {p.end_date}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Team & Actions Footer */}
-                <div className="flex items-center justify-between gap-4 mt-6 pt-3 border-t border-border/60">
-                  {/* Avatar stack */}
-                  <div className="flex items-center -space-x-2 overflow-hidden">
-                    {team.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">No team assigned</span>
-                    ) : (
-                      team.slice(0, 4).map((member, i) => (
-                        <div
-                          key={member.assignmentId}
-                          className="inline-block h-7 w-7 rounded-full ring-2 ring-card bg-brand-500/20 text-brand-300 font-bold text-xs flex items-center justify-center border border-brand-500/30"
-                          title={member.employee?.full_name}
-                        >
-                          {member.employee?.first_name[0]}
-                        </div>
-                      ))
-                    )}
-                    {team.length > 4 && (
-                      <div className="inline-block h-7 w-7 rounded-full ring-2 ring-card bg-slate-800 text-muted-foreground font-semibold text-xs flex items-center justify-center border border-border">
-                        +{team.length - 4}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions buttons */}
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => handleOpenDetails(p)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-foreground transition-colors"
-                      title="View Details"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleOpenEdit(p)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-foreground transition-colors"
-                      title="Edit Project"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* ADD DIALOG */}
-      <Dialog isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Add New Project" size="md">
-        <form onSubmit={handleAddSubmit} className="space-y-4">
-          {formError && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              <span>{formError}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Project Code *</label>
-              <input
-                type="text"
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                placeholder="PRJ-200"
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Client Name *</label>
-              <input
-                type="text"
-                value={form.client}
-                onChange={(e) => setForm({ ...form, client: e.target.value })}
-                placeholder="Client Inc."
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="at risk">At Risk</option>
+                <option value="completed">Completed</option>
+              </select>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-foreground focus:outline-none focus:border-brand-500"
+              >
+                <option value="all">All Priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+              </select>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Project Name *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Provide a detailed project title..."
-              className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Start Date *</label>
-              <input
-                type="date"
-                value={form.start_date}
-                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">End Date *</label>
-              <input
-                type="date"
-                value={form.end_date}
-                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Status</label>
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as Project["status"] })}
-              className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
-            >
-              <option value="Not Started">Not Started</option>
-              <option value="In Progress">In Progress</option>
-              <option value="On Hold">On Hold</option>
-              <option value="Completed">Completed</option>
-            </select>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-            <button
-              type="button"
-              onClick={() => setIsAddOpen(false)}
-              className="px-4 py-2 border border-input rounded-lg text-sm font-medium hover:bg-muted text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              Save Project
-            </button>
-          </div>
-        </form>
-      </Dialog>
-
-      {/* EDIT DIALOG */}
-      <Dialog isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit Project" size="md">
-        <form onSubmit={handleEditSubmit} className="space-y-4">
-          {formError && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              <span>{formError}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Project Code *</label>
-              <input
-                type="text"
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Client Name *</label>
-              <input
-                type="text"
-                value={form.client}
-                onChange={(e) => setForm({ ...form, client: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Project Name *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Start Date *</label>
-              <input
-                type="date"
-                value={form.start_date}
-                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">End Date *</label>
-              <input
-                type="date"
-                value={form.end_date}
-                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Status</label>
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as Project["status"] })}
-              className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
-            >
-              <option value="Not Started">Not Started</option>
-              <option value="In Progress">In Progress</option>
-              <option value="On Hold">On Hold</option>
-              <option value="Completed">Completed</option>
-            </select>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-            <button
-              type="button"
-              onClick={() => setIsEditOpen(false)}
-              className="px-4 py-2 border border-input rounded-lg text-sm font-medium hover:bg-muted text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              Update Project
-            </button>
-          </div>
-        </form>
-      </Dialog>
-
-      {/* DETAILS & TEAM ASSIGNMENT DIALOG */}
-      <Dialog isOpen={isDetailsOpen} onClose={() => setIsDetailsOpen(false)} title="Project Details & Team" size="lg">
-        {selectedProj && (
-          <div className="space-y-6">
-            {/* Upper details */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-500/5 p-4 rounded-xl border border-border">
-              <div>
-                <span className="text-xs font-semibold text-muted-foreground">Project Code</span>
-                <div className="font-mono font-bold mt-1 text-brand-400">{selectedProj.code}</div>
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-muted-foreground">Client Name</span>
-                <div className="font-semibold mt-1 text-foreground">{selectedProj.client}</div>
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-muted-foreground">Project Duration</span>
-                <div className="text-sm mt-1 text-foreground">
-                  {selectedProj.start_date} to {selectedProj.end_date}
-                </div>
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-muted-foreground">Status</span>
-                <div className="mt-1">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border",
-                      selectedProj.status === "In Progress" && "bg-blue-500/10 text-blue-400 border-blue-500/20",
-                      selectedProj.status === "Not Started" && "bg-slate-500/10 text-slate-400 border-slate-500/20",
-                      selectedProj.status === "On Hold" && "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                      selectedProj.status === "Completed" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                    )}
-                  >
-                    {selectedProj.status}
-                  </span>
-                </div>
-              </div>
-              <div className="col-span-full border-t border-border/60 pt-3 mt-1">
-                <span className="text-xs font-semibold text-muted-foreground">Project Name</span>
-                <div className="text-base font-bold mt-0.5 text-foreground">{selectedProj.name}</div>
-              </div>
-            </div>
-
-            {/* Team assignment list & form */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              {/* Left side: Add Employee Form */}
-              <div className="md:col-span-2 space-y-4">
-                <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                  <UserPlus className="h-4 w-4 text-brand-400" />
-                  Assign Employee
-                </h4>
-
-                <form onSubmit={handleAssignSubmit} className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">Select Employee</label>
-                    <select
-                      value={assignForm.employee_id}
-                      onChange={(e) => setAssignForm({ employee_id: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
-                      required
-                    >
-                      <option value="">-- Choose Staff --</option>
-                      {employees
-                        .filter((e) => !getAssignedTeam(selectedProj.id).some((a) => a.employee?.id === e.id))
-                        .map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.full_name} ({e.roles[0]?.name || "Operator"})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium shadow-md transition-colors"
-                  >
-                    Assign Staff
-                  </button>
-                </form>
-              </div>
-
-              {/* Right side: Assigned list */}
-              <div className="md:col-span-3 space-y-4 border-t md:border-t-0 md:border-l border-border pt-6 md:pt-0 md:pl-6">
-                <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                  <Users className="h-4 w-4 text-brand-400" />
-                  Assigned Team ({getAssignedTeam(selectedProj.id).length})
-                </h4>
-
-                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
-                  {getAssignedTeam(selectedProj.id).length === 0 ? (
-                    <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-lg">
-                      No team members assigned to this project yet.
-                    </div>
-                  ) : (
-                    getAssignedTeam(selectedProj.id).map((member) => (
-                      <div
-                        key={member.assignmentId}
-                        className="flex items-center justify-between p-2.5 rounded-lg bg-slate-500/5 border border-border"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-8 w-8 rounded-full bg-brand-500/10 text-brand-300 font-bold text-xs flex items-center justify-center">
-                            {member.employee?.first_name[0]}
+          {/* Table */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 text-muted-foreground font-semibold border-b border-slate-800 uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="p-3.5">Code & Project</th>
+                    <th className="p-3.5">Client</th>
+                    <th className="p-3.5">Priority</th>
+                    <th className="p-3.5">Status</th>
+                    <th className="p-3.5">Budget Burn</th>
+                    <th className="p-3.5">Progress</th>
+                    <th className="p-3.5">Assigned Team</th>
+                    <th className="p-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                  {filteredProjects.map((p) => {
+                    const projAssigns = assignments.filter((a) => a.project_id === p.id);
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3.5">
+                          <span className="font-mono text-[10px] text-brand-400 font-bold bg-brand-500/10 px-1.5 py-0.5 rounded border border-brand-500/20 block w-fit mb-0.5">
+                            {p.code}
+                          </span>
+                          <span className="font-semibold text-slate-100 block">{p.name}</span>
+                        </td>
+                        <td className="p-3.5 font-medium text-slate-300">
+                          <div className="flex items-center gap-1.5">
+                            <Building2 className="h-3.5 w-3.5 text-slate-500" />
+                            {p.client}
                           </div>
-                          <div>
-                            <div className="text-xs font-semibold text-foreground">{member.employee?.full_name}</div>
-                            <div className="text-[10px] text-muted-foreground">
-                              {member.employee?.roles[0]?.name || "Operator"}
+                        </td>
+                        <td className="p-3.5">
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-bold border",
+                              p.priority === "Critical" && "bg-red-500/10 text-red-400 border-red-500/20",
+                              p.priority === "High" && "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                              p.priority === "Medium" && "bg-blue-500/10 text-blue-400 border-blue-500/20",
+                              p.priority === "Low" && "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                            )}
+                          >
+                            {p.priority}
+                          </span>
+                        </td>
+                        <td className="p-3.5">
+                          <span
+                            className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 w-fit",
+                              p.status === "Active" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                              p.status === "At Risk" && "bg-red-500/10 text-red-400 border-red-500/20",
+                              p.status === "Completed" && "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                            )}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="space-y-1 w-32">
+                            <div className="flex justify-between text-[10px] font-medium text-slate-400">
+                              <span>${(p.spent / 1000).toFixed(0)}k</span>
+                              <span>${(p.budget / 1000).toFixed(0)}k</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full",
+                                  p.spent > p.budget ? "bg-red-500" : "bg-brand-500"
+                                )}
+                                style={{ width: `${Math.min(100, (p.spent / p.budget) * 100)}%` }}
+                              />
                             </div>
                           </div>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveAssignment(member.assignmentId)}
-                          className="p-1 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
-                          title="Remove assignment"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex justify-end pt-4 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setIsDetailsOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-foreground rounded-lg text-sm font-medium transition-colors"
-              >
-                Close
-              </button>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-200 text-xs w-8">{p.progress}%</span>
+                            <div className="w-16 h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${p.progress}%` }} />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="flex items-center -space-x-2 overflow-hidden">
+                            {projAssigns.map((asg) => {
+                              const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === asg.employee_id);
+                              if (!emp) return null;
+                              return (
+                                <img
+                                  key={asg.id}
+                                  src={emp.avatar}
+                                  alt={emp.first_name}
+                                  title={`${emp.first_name} (${asg.role}) - ${asg.allocation_percentage}%`}
+                                  className="inline-block h-6 w-6 rounded-full ring-2 ring-slate-900 object-cover"
+                                />
+                              );
+                            })}
+                            {projAssigns.length === 0 && <span className="text-slate-500 text-[10px]">Unassigned</span>}
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-right space-x-1.5">
+                          <button
+                            onClick={() => {
+                              setSelectedProj(p);
+                              setIsAssignOpen(true);
+                            }}
+                            className="px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 rounded text-[11px] font-semibold transition-colors border border-brand-500/20"
+                          >
+                            + Team
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
-      </Dialog>
+        </div>
+      )}
+
+      {/* 2. RESOURCE CAPACITY MATRIX TAB */}
+      {activeTab === "resource_matrix" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4 shadow-sm">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100">Draftsmen & Engineer Capacity Matrix</h3>
+              <p className="text-xs text-slate-400">Calculated workload allocation based on active engineering project assignments.</p>
+            </div>
+            <div className="space-y-3.5">
+              {employeeWorkloads.map(({ employee, totalAlloc, assignments: empAssigns }) => (
+                <div key={employee.id} className="p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <img src={employee.avatar} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-800" />
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-100">{employee.first_name} {employee.last_name}</h4>
+                        <span className="text-[10px] text-slate-400 block">{employee.designation} • {employee.department}</span>
+                      </div>
+                    </div>
+                    <span
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-bold border",
+                        totalAlloc > 100 && "bg-red-500/15 text-red-400 border-red-500/30 animate-pulse",
+                        totalAlloc === 100 && "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+                        totalAlloc < 100 && totalAlloc > 0 && "bg-blue-500/15 text-blue-400 border-blue-500/30",
+                        totalAlloc === 0 && "bg-slate-800 text-slate-400 border-slate-700"
+                      )}
+                    >
+                      {totalAlloc}% Allocated {totalAlloc > 100 && "(OVERLOAD)"}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          totalAlloc > 100 ? "bg-red-500" : "bg-brand-500"
+                        )}
+                        style={{ width: `${Math.min(100, totalAlloc)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Active assignments pills */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {empAssigns.map((asg) => {
+                      const proj = projects.find((p) => p.id === asg.project_id);
+                      return (
+                        <span key={asg.id} className="text-[10px] px-2 py-0.5 bg-slate-900 text-slate-300 border border-slate-800 rounded-md flex items-center gap-1 font-medium">
+                          <span className="text-brand-400 font-bold">{proj?.code}</span>
+                          <span>({asg.role} - {asg.allocation_percentage}%)</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4 h-fit shadow-sm">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <Users className="h-4 w-4 text-brand-400" /> Resource Bench Overview
+            </h3>
+            <div className="space-y-3 text-xs text-slate-300">
+              <div className="p-3 bg-slate-950 rounded-lg border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Available Capacity</span>
+                <span className="text-lg font-bold text-emerald-400">
+                  {employeeWorkloads.filter((w) => w.totalAlloc < 100).length} Engineers
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Available to take on new steel detailing or BIM modeling tasks.</p>
+              </div>
+              <div className="p-3 bg-slate-950 rounded-lg border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Over-Allocated Warnings</span>
+                <span className="text-lg font-bold text-red-400">
+                  {employeeWorkloads.filter((w) => w.totalAlloc > 100).length} Engineers
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Require workload re-balancing to prevent burnout.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MILESTONES TAB */}
+      {activeTab === "milestones" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {projects.map((proj) => (
+            <div key={proj.id} className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl space-y-3 shadow-sm">
+              <div className="flex justify-between items-start border-b border-slate-800 pb-2.5">
+                <div>
+                  <span className="text-[10px] font-bold text-brand-400 font-mono">{proj.code}</span>
+                  <h4 className="text-sm font-bold text-slate-100">{proj.name}</h4>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 bg-slate-950 border border-slate-800 rounded text-slate-300 font-semibold">
+                  {proj.tasks.completed}/{proj.tasks.total} Tasks Completed
+                </span>
+              </div>
+              <div className="space-y-2">
+                {proj.milestones.map((m) => (
+                  <label key={m.id} className="flex items-center justify-between p-2.5 bg-slate-950/60 hover:bg-slate-950 rounded-lg cursor-pointer border border-slate-800/50 transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={m.is_completed}
+                        onChange={() => handleToggleMilestone(proj.id, m.id)}
+                        className="rounded border-slate-700 text-brand-500 focus:ring-brand-500 bg-slate-900 h-4 w-4"
+                      />
+                      <span className={cn("text-xs font-medium", m.is_completed ? "line-through text-slate-500" : "text-slate-200")}>
+                        {m.name}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <Calendar className="h-3 w-3" /> {m.due_date}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* CREATE PROJECT MODAL */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg p-5 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-brand-400" /> Create New Engineering Project
+              </h3>
+              <button onClick={() => setIsAddOpen(false)} className="text-slate-400 hover:text-slate-100">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAddProject} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Project Code</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. PRJ-DEL-10"
+                    value={addForm.code}
+                    onChange={(e) => setAddForm({ ...addForm, code: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Client Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. L&T Heavy Eng."
+                    value={addForm.client}
+                    onChange={(e) => setAddForm({ ...addForm, client: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Project Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Mumbai Metro Line 4 Viaducts"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Approved Budget ($)</label>
+                  <input
+                    type="number"
+                    required
+                    value={addForm.budget}
+                    onChange={(e) => setAddForm({ ...addForm, budget: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Priority</label>
+                  <select
+                    value={addForm.priority}
+                    onChange={(e) => setAddForm({ ...addForm, priority: e.target.value as any })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                  >
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button type="button" onClick={() => setIsAddOpen(false)} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold">
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-semibold shadow-md shadow-brand-500/20">
+                  Save & Launch Project
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ASSIGN STAFF MODAL */}
+      {isAssignOpen && selectedProj && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">Assign Engineer to {selectedProj.code}</h3>
+                <span className="text-[10px] text-slate-400">{selectedProj.name}</span>
+              </div>
+              <button onClick={() => setIsAssignOpen(false)} className="text-slate-400 hover:text-slate-100">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAssignSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Select Employee</label>
+                <select
+                  required
+                  value={assignForm.employee_id}
+                  onChange={(e) => setAssignForm({ ...assignForm, employee_id: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                >
+                  <option value="">-- Choose Staff Member --</option>
+                  {ENTERPRISE_EMPLOYEES.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.first_name} {emp.last_name} ({emp.designation})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Project Role</label>
+                  <select
+                    value={assignForm.role}
+                    onChange={(e) => setAssignForm({ ...assignForm, role: e.target.value as any })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                  >
+                    <option value="Lead Engineer">Lead Engineer</option>
+                    <option value="BIM Specialist">BIM Specialist</option>
+                    <option value="Structural Detailer">Structural Detailer</option>
+                    <option value="Checker">Checker</option>
+                    <option value="Modeler">Modeler</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1 font-medium">Allocation (%)</label>
+                  <select
+                    value={assignForm.allocation_percentage}
+                    onChange={(e) => setAssignForm({ ...assignForm, allocation_percentage: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:border-brand-500 focus:outline-none"
+                  >
+                    <option value={25}>25% Capacity</option>
+                    <option value={50}>50% Capacity</option>
+                    <option value={75}>75% Capacity</option>
+                    <option value={100}>100% Full Time</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button type="button" onClick={() => setIsAssignOpen(false)} className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold">
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-semibold shadow-md shadow-brand-500/20">
+                  Assign Staff
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

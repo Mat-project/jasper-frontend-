@@ -133,7 +133,7 @@ const initialDB: MockDatabase = {
       client: "Tesla",
       start_date: "2026-01-01",
       end_date: "2026-12-31",
-      status: "In Progress",
+      status: "Active",
       created_at: "2026-01-01T00:00:00Z"
     },
     {
@@ -143,7 +143,7 @@ const initialDB: MockDatabase = {
       client: "SpaceX",
       start_date: "2026-03-15",
       end_date: "2026-09-15",
-      status: "In Progress",
+      status: "Active",
       created_at: "2026-03-15T00:00:00Z"
     },
     {
@@ -153,22 +153,22 @@ const initialDB: MockDatabase = {
       client: "NASA",
       start_date: "2026-06-01",
       end_date: "2027-06-01",
-      status: "Not Started",
+      status: "Planned",
       created_at: "2026-06-01T00:00:00Z"
     }
-  ],
+  ] as any,
   projectAssignments: [
     { id: "assign-1", project_id: "proj-1", employee_id: "emp-2", assigned_at: "2026-01-11T09:00:00Z" },
     { id: "assign-2", project_id: "proj-1", employee_id: "emp-3", assigned_at: "2026-01-12T09:00:00Z" },
     { id: "assign-3", project_id: "proj-2", employee_id: "emp-2", assigned_at: "2026-03-16T09:00:00Z" }
-  ],
+  ] as any,
   attendanceRecords: [
     { id: "att-1", date: "2026-06-26", employee_id: "emp-1", status: "Present", remarks: "Regular hours" },
     { id: "att-2", date: "2026-06-26", employee_id: "emp-2", status: "Present", remarks: "Regular hours" },
     { id: "att-3", date: "2026-06-26", employee_id: "emp-3", status: "On Leave", remarks: "Sick leave approved" },
     { id: "att-4", date: "2026-06-27", employee_id: "emp-1", status: "Present", remarks: "Regular hours" },
     { id: "att-5", date: "2026-06-27", employee_id: "emp-2", status: "Half Day", remarks: "Doctor appointment" }
-  ],
+  ] as any,
   leaveRequests: [
     {
       id: "leave-1",
@@ -620,7 +620,7 @@ export const mockService = {
       id: `assign-${Date.now()}`,
       project_id: projectId,
       employee_id: employeeId,
-      assigned_at: new Date().toISOString()
+      assigned_date: new Date().toISOString()
     };
     db.projectAssignments.push(newAssign);
     saveDB(db);
