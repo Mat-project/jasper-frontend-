@@ -15,6 +15,8 @@ import {
   Filter,
   Search,
   Plus,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   ENTERPRISE_EMPLOYEES,
@@ -31,15 +33,14 @@ export default function EnterpriseProjectsPage() {
   const [activeTab, setActiveTab] = useState<"portfolio" | "resource_matrix" | "milestones">("portfolio");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [selectedProj, setSelectedProj] = useState<EnterpriseProject | null>(null);
 
   const [addForm, setAddForm] = useState({
-    code: "", name: "", client: "", budget: 500000,
+    code: "", name: "", client: "",
     start_date: "2026-07-01", end_date: "2026-12-31",
-    priority: "High" as EnterpriseProject["priority"],
   });
 
   const [assignForm, setAssignForm] = useState({
@@ -60,9 +61,14 @@ export default function EnterpriseProjectsPage() {
       p.code.toLowerCase().includes(search.toLowerCase()) ||
       p.client.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || p.status.toLowerCase() === statusFilter.toLowerCase();
-    const matchesPriority = priorityFilter === "all" || p.priority.toLowerCase() === priorityFilter.toLowerCase();
-    return matchesSearch && matchesStatus && matchesPriority;
+    return matchesSearch && matchesStatus;
   });
+
+  const handleDeleteProject = (id: string) => {
+    setProjects((prev) => prev.filter((p) => p.id !== id));
+    setAssignments((prev) => prev.filter((a) => a.project_id !== id));
+    setDeleteConfirmId(null);
+  };
 
   const employeeWorkloads = ENTERPRISE_EMPLOYEES.map((emp) => {
     const empAssigns = assignments.filter((a) => a.employee_id === emp.id);
@@ -75,15 +81,15 @@ export default function EnterpriseProjectsPage() {
     if (!addForm.code || !addForm.name || !addForm.client) return;
     const newProj: EnterpriseProject = {
       id: `prj-${Date.now()}`, code: addForm.code, name: addForm.name,
-      client: addForm.client, budget: Number(addForm.budget), spent: 0,
+      client: addForm.client, budget: 0, spent: 0,
       start_date: addForm.start_date, end_date: addForm.end_date,
-      status: "Active", priority: addForm.priority, progress: 0,
+      status: "Active", priority: "Medium", progress: 0,
       milestones: [{ id: `m-${Date.now()}`, name: "Kickoff & Design Basis", due_date: addForm.start_date, is_completed: true }],
       tasks: { total: 10, completed: 0, in_progress: 2, pending: 8 },
     };
     setProjects([newProj, ...projects]);
     setIsAddOpen(false);
-    setAddForm({ code: "", name: "", client: "", budget: 500000, start_date: "2026-07-01", end_date: "2026-12-31", priority: "High" });
+    setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", end_date: "2026-12-31" });
   };
 
   const handleAssignSubmit = (e: React.FormEvent) => {
@@ -121,16 +127,6 @@ export default function EnterpriseProjectsPage() {
       "Planned": "bg-slate-50 text-slate-600 border-slate-200",
     };
     return map[status] || "bg-gray-50 text-gray-600 border-gray-200";
-  };
-
-  const priorityBadge = (priority: string) => {
-    const map: Record<string, string> = {
-      "Critical": "bg-red-50 text-red-700 border-red-200",
-      "High": "bg-orange-50 text-orange-700 border-orange-200",
-      "Medium": "bg-blue-50 text-blue-700 border-blue-200",
-      "Low": "bg-gray-50 text-gray-600 border-gray-200",
-    };
-    return map[priority] || "bg-gray-50 text-gray-600 border-gray-200";
   };
 
   return (
@@ -225,16 +221,8 @@ export default function EnterpriseProjectsPage() {
                   <option value="active">Active</option>
                   <option value="at risk">At Risk</option>
                   <option value="completed">Completed</option>
-                </select>
-                <select
-                  value={priorityFilter}
-                  onChange={(e) => setPriorityFilter(e.target.value)}
-                  className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-400"
-                >
-                  <option value="all">All Priorities</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
+                  <option value="on hold">On Hold</option>
+                  <option value="planned">Planned</option>
                 </select>
               </div>
             </div>
@@ -246,12 +234,10 @@ export default function EnterpriseProjectsPage() {
                   <tr>
                     <th className="px-4 py-3">Project</th>
                     <th className="px-4 py-3">Client</th>
-                    <th className="px-4 py-3">Priority</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Budget Burn</th>
                     <th className="px-4 py-3">Progress</th>
                     <th className="px-4 py-3">Team</th>
-                    <th className="px-4 py-3 text-right">Action</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -271,33 +257,14 @@ export default function EnterpriseProjectsPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold border", priorityBadge(p.priority))}>
-                            {p.priority}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
                           <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1 w-fit", statusBadge(p.status))}>
                             <span className="h-1.5 w-1.5 rounded-full bg-current" />{p.status}
                           </span>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="space-y-1 w-36">
-                            <div className="flex justify-between text-xs text-slate-500">
-                              <span>${(p.spent / 1000).toFixed(0)}k</span>
-                              <span>${(p.budget / 1000).toFixed(0)}k</span>
-                            </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={cn("h-full rounded-full transition-all", p.spent > p.budget ? "bg-red-500" : "bg-blue-500")}
-                                style={{ width: `${Math.min(100, (p.spent / p.budget) * 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-gray-800 text-sm w-9">{p.progress}%</span>
-                            <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
                               <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${p.progress}%` }} />
                             </div>
                           </div>
@@ -320,13 +287,22 @@ export default function EnterpriseProjectsPage() {
                             {projAssigns.length === 0 && <span className="text-xs text-slate-400">Unassigned</span>}
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <button
-                            onClick={() => { setSelectedProj(p); setIsAssignOpen(true); }}
-                            className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200 transition-colors"
-                          >
-                            + Assign
-                          </button>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => { setSelectedProj(p); setIsAssignOpen(true); }}
+                              className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200 transition-colors"
+                            >
+                              + Assign
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(p.id)}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 transition-colors"
+                              title="Delete Project"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -483,19 +459,18 @@ export default function EnterpriseProjectsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Approved Budget ($)</label>
-                  <input type="number" required value={addForm.budget}
-                    onChange={(e) => setAddForm({ ...addForm, budget: Number(e.target.value) })}
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Start Date</label>
+                  <input type="date" value={addForm.start_date}
+                    onChange={(e) => setAddForm({ ...addForm, start_date: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Priority</label>
-                  <select value={addForm.priority} onChange={(e) => setAddForm({ ...addForm, priority: e.target.value as any })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
-                  >
-                    <option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
-                  </select>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">End Date</label>
+                  <input type="date" value={addForm.end_date}
+                    onChange={(e) => setAddForm({ ...addForm, end_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none"
+                  />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
@@ -565,6 +540,47 @@ export default function EnterpriseProjectsPage() {
           </div>
         </div>
       )}
+      {/* DELETE CONFIRMATION DIALOG */}
+      {deleteConfirmId && (() => {
+        const proj = projects.find((p) => p.id === deleteConfirmId);
+        if (!proj) return null;
+        return (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 overflow-hidden">
+              <div className="flex flex-col items-center gap-3 px-6 py-6 text-center">
+                <div className="p-3 bg-red-50 rounded-full">
+                  <AlertTriangle className="h-7 w-7 text-red-500" />
+                </div>
+                <h3 className="font-bold text-gray-900 text-lg">Delete Project?</h3>
+                <p className="text-sm text-slate-500">
+                  You are about to permanently delete{" "}
+                  <span className="font-bold text-gray-800">{proj.name}</span>{" "}
+                  <span className="font-mono text-xs text-blue-600">({proj.code})</span>.
+                  <br />
+                  All assignments linked to this project will also be removed.
+                </p>
+                <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 w-full">
+                  This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex gap-3 px-6 pb-6">
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteProject(deleteConfirmId)}
+                  className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="h-4 w-4" /> Delete Project
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
