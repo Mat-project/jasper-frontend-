@@ -32,8 +32,9 @@ export const getRefreshToken = (): string | null =>
   Cookies.get(REFRESH_KEY) ?? null;
 
 export const setTokens = (access: string, refresh: string): void => {
-  Cookies.set(TOKEN_KEY, access, { expires: 1 / 96, secure: true, sameSite: "Strict" }); // 15 min
-  Cookies.set(REFRESH_KEY, refresh, { expires: 7, secure: true, sameSite: "Strict" }); // 7 days
+  const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
+  Cookies.set(TOKEN_KEY, access, { expires: 1 / 96, secure: isSecure, sameSite: "Lax" }); // 15 min
+  Cookies.set(REFRESH_KEY, refresh, { expires: 7, secure: isSecure, sameSite: "Lax" }); // 7 days
 };
 
 export const clearTokens = (): void => {

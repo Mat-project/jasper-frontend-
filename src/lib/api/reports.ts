@@ -5,11 +5,23 @@ export const getReport = async (reportType: string, params: Record<string, any> 
   return response.data;
 };
 
-export const downloadReportCSV = (reportType: string, params: Record<string, any> = {}) => {
-  const queryParams = new URLSearchParams({ ...params, export: "csv" }).toString();
-  const token = apiClient.defaults.headers.common["Authorization"] || "";
-  const url = `${apiClient.defaults.baseURL}/api/v1/reports/${reportType}/?${queryParams}`;
-  
-  // Trigger direct browser download
-  window.open(url, "_blank");
+export const downloadReportCSV = async (reportType: string, params: Record<string, any> = {}) => {
+  try {
+    const response = await apiClient.get(`/api/v1/reports/${reportType}/`, {
+      params: { ...params, export: "csv" },
+      responseType: "blob",
+    });
+    
+    const blob = new Blob([response.data], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${reportType}_report_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Failed to download CSV", error);
+  }
 };

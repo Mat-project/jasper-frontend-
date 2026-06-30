@@ -27,9 +27,6 @@ import {
   ChevronRight,
   ChevronLeft,
   CreditCard,
-  TrendingUp,
-  Activity,
-  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -90,17 +87,6 @@ export function Sidebar() {
     },
     { label: "Documents", href: "/documents", icon: FileText },
     { label: "Revisions", href: "/revisions", icon: GitBranch },
-    {
-      label: "Performance",
-      icon: TrendingUp,
-      subItems: [
-        { label: "Employee Productivity", href: "/performance/employee", icon: Award },
-        { label: "Team Productivity", href: "/performance/team", icon: Activity },
-        { label: "Department Productivity", href: "/performance/department", icon: BarChart3 },
-        { label: "Target Tracking", href: "/performance/targets", icon: ShieldCheck },
-        { label: "KPI Overview", href: "/performance/kpi", icon: Activity },
-      ],
-    },
     { label: "Reports", href: "/reports", icon: BarChart3 },
     {
       label: "Administration",
