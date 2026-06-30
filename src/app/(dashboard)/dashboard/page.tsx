@@ -1,212 +1,352 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getEmployees } from "@/lib/api/employees";
-import { mockService } from "@/lib/api/mockService";
-import { User } from "@/types/user";
-import { Project } from "@/types/projects";
-import { ProductionEntry } from "@/types/production";
-import { AttendanceRecord } from "@/types/attendance";
-import { Users, FolderKanban, Factory, CheckSquare, TrendingUp, Clock, AlertCircle, FileCheck2 } from "lucide-react";
+import { useAuth } from "@/lib/auth/context";
+import { getAdminDashboard, getManagerDashboard, getEmployeeDashboard } from "@/lib/api/dashboard";
+import { Users, FolderKanban, Factory, Clock, AlertCircle, TrendingUp, DollarSign, Activity, FileText, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
-type EmployeeRecord = User & { employee_code?: string; department?: string; section?: string };
-
 export default function DashboardPage() {
-  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [production, setProduction] = useState<ProductionEntry[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [pendingLeavesCount, setPendingLeavesCount] = useState(0);
-  const [pendingDocsCount, setPendingDocsCount] = useState(0);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+
+  // Check roles helper
+  const hasRole = (roleName: string) => {
+    return user?.roles.some(r => r.name.toLowerCase() === roleName.toLowerCase()) || false;
+  };
 
   useEffect(() => {
-    // Employees come from the real API; everything else still uses mockService until their sprints are built
-    getEmployees()
-      .then((emps) => setEmployees(emps as EmployeeRecord[]))
-      .catch(() => setEmployees([]));
+    if (!user) return;
 
-    setProjects(mockService.getProjects());
-    setProduction(mockService.getProductionEntries());
-    setAttendance(mockService.getAttendance());
-    setPendingLeavesCount(mockService.getLeaveRequests().filter((r) => r.status === "Pending").length);
-    setPendingDocsCount(mockService.getDocuments().filter((d) => d.status === "Pending").length);
-  }, []);
+    const fetchDashboard = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        let data;
+        if (hasRole("Admin")) {
+          data = await getAdminDashboard();
+        } else if (hasRole("Manager")) {
+          data = await getManagerDashboard();
+        } else {
+          data = await getEmployeeDashboard();
+        }
+        setDashboardData(data);
+      } catch (err: any) {
+        console.error("Dashboard load failed:", err);
+        setError("Unable to load dashboard data. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const totalEmployees = employees.length;
-  const activeProjects = projects.filter((p) => p.status === "Active").length;
+    fetchDashboard();
+  }, [user]);
 
-  const totalTonnageApproved = production
-    .filter((e) => e.status === "Approved")
-    .reduce((sum, e) => sum + e.tonnage, 0);
-
-  const latestDate = attendance.length > 0 ? attendance[attendance.length - 1].date : "";
-  const latestAttendance = attendance.filter((r) => r.date === latestDate);
-  const presentCount = latestAttendance.filter((r) => r.status === "Present" || r.status === "Half Day").length;
-  const attendanceRate = latestAttendance.length > 0 ? Math.round((presentCount / latestAttendance.length) * 100) : 0;
-
-  const pendingProdCount = production.filter((e) => e.status === "Submitted").length;
-  const totalPendingApprovals = pendingLeavesCount + pendingDocsCount + pendingProdCount;
-
-  const dailyProductionMap: Record<string, number> = {};
-  production.filter((e) => e.status === "Approved").slice(0, 10).forEach((e) => {
-    dailyProductionMap[e.date] = (dailyProductionMap[e.date] || 0) + e.tonnage;
-  });
-  const prodTrendData = Object.entries(dailyProductionMap).map(([date, tonnage]) => ({ date, tonnage })).sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
-  const maxProdTonnage = Math.max(...prodTrendData.map((d) => d.tonnage), 10);
-
-  const attendanceTrendMap: Record<string, { present: number; total: number }> = {};
-  attendance.forEach((r) => {
-    if (!attendanceTrendMap[r.date]) attendanceTrendMap[r.date] = { present: 0, total: 0 };
-    attendanceTrendMap[r.date].total += 1;
-    if (r.status === "Present" || r.status === "Half Day") attendanceTrendMap[r.date].present += 1;
-  });
-  const attendanceTrendData = Object.entries(attendanceTrendMap).map(([date, val]) => ({ date, rate: Math.round((val.present / val.total) * 100) })).sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Engineering Operations Management System — Operational Health Overview.</p>
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <p className="text-sm text-muted-foreground animate-pulse">Loading operation analytics...</p>
       </div>
+    );
+  }
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total Employees", value: totalEmployees, icon: Users, color: "text-brand-400 bg-brand-500/10" },
-          { label: "Active Projects", value: activeProjects, icon: FolderKanban, color: "text-emerald-400 bg-emerald-500/10" },
-          { label: "Approved Detailing Tonnage", value: `${totalTonnageApproved.toFixed(1)} MT`, icon: Factory, color: "text-amber-400 bg-amber-500/10" },
-          { label: `Attendance Rate (${latestDate || "Today"})`, value: `${attendanceRate}%`, icon: Clock, color: "text-purple-400 bg-purple-500/10" },
-        ].map((card, idx) => (
-          <div key={idx} className="rounded-xl border border-border bg-card p-5 shadow-sm hover:shadow-md transition-all duration-150 flex items-center justify-between">
-            <div>
-              <div className="text-sm text-muted-foreground font-semibold">{card.label}</div>
-              <div className="text-2xl font-bold text-foreground mt-1">{card.value}</div>
-            </div>
-            <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center shrink-0", card.color)}>
-              <card.icon className="h-5 w-5" />
-            </div>
-          </div>
-        ))}
+  if (error) {
+    return (
+      <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center space-y-3 max-w-md mx-auto mt-12">
+        <AlertCircle className="text-destructive h-10 w-10 mx-auto" />
+        <h3 className="font-bold text-foreground">Failed to Load Dashboard</h3>
+        <p className="text-sm text-muted-foreground">{error}</p>
       </div>
+    );
+  }
 
-      {totalPendingApprovals > 0 && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="text-amber-400 h-5 w-5 shrink-0" />
-            <div>
-              <h4 className="text-sm font-semibold text-amber-300">Approvals Awaiting Review</h4>
-              <p className="text-xs text-amber-400/80 mt-0.5">
-                You have <span className="font-bold text-amber-200">{totalPendingApprovals}</span> total items pending approval:{" "}
-                {pendingProdCount} production, {pendingLeavesCount} leaves, and {pendingDocsCount} documents.
-              </p>
-            </div>
-          </div>
-          <Link href="/production/approval" className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg text-xs font-bold transition-colors shrink-0 text-center">
-            Review Actions
-          </Link>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="text-brand-400 h-5 w-5" />
-              <h3 className="text-sm font-bold text-foreground">Weekly Production Trend (Tonnage)</h3>
-            </div>
-          </div>
-          {prodTrendData.length === 0 ? (
-            <div className="py-16 text-center text-xs text-muted-foreground">No recent production data logged.</div>
-          ) : (
-            <div className="relative h-44 w-full flex items-end justify-between pt-6 border-b border-border/80">
-              {prodTrendData.map((d, i) => {
-                const heightPercent = Math.min((d.tonnage / maxProdTonnage) * 80, 80);
-                return (
-                  <div key={i} className="flex flex-col items-center gap-1.5 flex-1 relative group">
-                    <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-[9px] text-white px-1.5 py-0.5 rounded shadow">{d.tonnage.toFixed(1)} MT</div>
-                    <div style={{ height: `${heightPercent || 5}%` }} className="w-7 bg-brand-500 rounded-t group-hover:bg-brand-400 transition-all duration-150" />
-                    <span className="text-[10px] text-muted-foreground font-mono">{d.date.slice(5)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+  // Render Admin Dashboard
+  if (hasRole("Admin") && dashboardData) {
+    const { kpis, production_summary, billing_summary, charts } = dashboardData;
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Admin Console</h1>
+          <p className="text-sm text-muted-foreground mt-1">Centralized operational health, Detailing summaries & Billing status.</p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Clock className="text-purple-400 h-5 w-5" />
-              <h3 className="text-sm font-bold text-foreground">Weekly Attendance rate (%)</h3>
-            </div>
-          </div>
-          {attendanceTrendData.length === 0 ? (
-            <div className="py-16 text-center text-xs text-muted-foreground">No attendance data logged.</div>
-          ) : (
-            <div className="relative h-44 w-full flex items-end justify-between pt-6 border-b border-border/80">
-              {attendanceTrendData.map((d, i) => (
-                <div key={i} className="flex flex-col items-center gap-1.5 flex-1 relative group">
-                  <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-[9px] text-white px-1.5 py-0.5 rounded shadow">{d.rate}% Present</div>
-                  <div style={{ height: `${d.rate * 0.8 || 5}%` }} className="w-7 bg-purple-500 rounded-t group-hover:bg-purple-400 transition-all duration-150" />
-                  <span className="text-[10px] text-muted-foreground font-mono">{d.date.slice(5)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-card border border-border rounded-xl p-5 space-y-3 lg:col-span-1">
-          <div className="pb-2 border-b border-border"><h3 className="text-sm font-bold text-foreground">Projects Summary</h3></div>
-          <div className="space-y-2">
-            {projects.slice(0, 3).map((p) => (
-              <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-500/5 border border-border">
-                <div>
-                  <div className="text-xs font-bold text-foreground">{p.name}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">{p.code} • {p.client}</div>
-                </div>
-                <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded border border-border/60", p.status === "Active" && "bg-blue-500/10 text-blue-400", p.status === "Planned" && "bg-slate-500/10 text-slate-400", p.status === "Completed" && "bg-emerald-500/10 text-emerald-400")}>{p.status}</span>
+        {/* KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Active Detailing Staff", value: kpis.total_employees, icon: Users, color: "text-brand-400 bg-brand-500/10" },
+            { label: "Monitored Projects", value: kpis.active_projects, icon: FolderKanban, color: "text-emerald-400 bg-emerald-500/10" },
+            { label: "Today Attendance", value: kpis.today_attendance, icon: Clock, color: "text-purple-400 bg-purple-500/10" },
+            { label: "Approvals Required", value: kpis.pending_approvals.total, icon: AlertCircle, color: "text-amber-400 bg-amber-500/10" },
+          ].map((card, idx) => (
+            <div key={idx} className="rounded-xl border border-border bg-card/60 backdrop-blur-md p-5 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all duration-200 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{card.label}</span>
+                <div className="text-3xl font-bold text-foreground mt-1">{card.value}</div>
               </div>
-            ))}
-          </div>
+              <div className={cn("h-11 w-11 rounded-lg flex items-center justify-center shrink-0", card.color)}>
+                <card.icon className="h-5 w-5" />
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-5 space-y-3 lg:col-span-1">
-          <div className="pb-2 border-b border-border"><h3 className="text-sm font-bold text-foreground">Production Logs</h3></div>
-          <div className="space-y-2">
-            {production.filter((e) => e.status === "Approved").slice(0, 3).map((e) => {
-              const proj = projects.find((p) => p.id === e.project_id);
-              const emp = employees.find((em) => em.id === e.employee_id);
-              return (
-                <div key={e.id} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-500/5 border border-border">
+        {/* Main Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Chart */}
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="text-brand-400 h-5 w-5" />
+                  <h3 className="text-sm font-bold text-foreground">Monthly Detailing Production (Tonnage)</h3>
+                </div>
+              </div>
+              <div className="relative h-48 w-full flex items-end justify-between pt-6 border-b border-border/80">
+                {charts.monthly_production.map((d: any, i: number) => {
+                  const maxTons = Math.max(...charts.monthly_production.map((x: any) => x.tonnage), 10);
+                  const heightPercent = Math.min((d.tonnage / maxTons) * 80, 80);
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-1.5 flex-1 relative group">
+                      <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-[10px] text-white px-2 py-0.5 rounded shadow whitespace-nowrap">{d.tonnage} MT</div>
+                      <div style={{ height: `${heightPercent || 5}%` }} className="w-8 bg-gradient-to-t from-brand-600 to-brand-400 rounded-t group-hover:from-brand-500 group-hover:to-brand-300 transition-all duration-150" />
+                      <span className="text-[10px] text-muted-foreground font-mono mt-1 rotate-12">{d.month.slice(0, 3)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Summaries */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Production Output (Current Month)</h4>
+                <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-semibold text-foreground">{emp?.full_name || "Staff"}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">{proj?.code || "—"} • {e.quantity} Sheets</div>
+                    <span className="text-2xl font-bold text-foreground">{production_summary.total_tonnage} MT</span>
+                    <p className="text-[11px] text-muted-foreground">Total Tonnage Approved</p>
                   </div>
-                  <span className="text-xs font-semibold text-emerald-400">+{e.tonnage} MT</span>
+                  <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                    <Factory className="text-emerald-400 h-5 w-5" />
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+              <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Billing & Revision Charges</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-xl font-bold text-amber-400">₹{billing_summary.pending_amount.toLocaleString()}</span>
+                    <p className="text-[10px] text-muted-foreground">Pending Billing</p>
+                  </div>
+                  <div>
+                    <span className="text-xl font-bold text-emerald-400">₹{billing_summary.paid_amount.toLocaleString()}</span>
+                    <p className="text-[10px] text-muted-foreground">Collected</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="bg-card border border-border rounded-xl p-5 space-y-3 lg:col-span-1">
-          <div className="pb-2 border-b border-border"><h3 className="text-sm font-bold text-foreground">Attendance overview</h3></div>
-          <div className="space-y-2">
-            {latestAttendance.slice(0, 3).map((r) => {
-              const emp = employees.find((e) => e.id === r.employee_id);
-              return (
-                <div key={r.id} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-500/5 border border-border">
-                  <span className="text-xs font-semibold text-foreground">{emp?.full_name || "Staff"}</span>
-                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded border border-border/60", r.status === "Present" && "bg-emerald-500/10 text-emerald-400", r.status === "Absent" && "bg-red-500/10 text-red-400", r.status === "On Leave" && "bg-purple-500/10 text-purple-400")}>{r.status}</span>
+          {/* Quick Actions */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-bold text-foreground">Operational Actions</h3>
+            <div className="space-y-3">
+              <Link href="/reports" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
+                <Activity className="text-brand-400 h-5 w-5" />
+                <div>
+                  <div className="text-xs font-bold">Generate Enterprise Reports</div>
+                  <span className="text-[10px] text-muted-foreground">Export CSV & PDF styled summaries</span>
                 </div>
-              );
-            })}
+              </Link>
+              <Link href="/admin/settings" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
+                <DollarSign className="text-purple-400 h-5 w-5" />
+                <div>
+                  <div className="text-xs font-bold">Manage System Settings</div>
+                  <span className="text-[10px] text-muted-foreground">Adjust configuration keys</span>
+                </div>
+              </Link>
+              <Link href="/admin/audit" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
+                <FileText className="text-amber-400 h-5 w-5" />
+                <div>
+                  <div className="text-xs font-bold">Audit Trail Logs</div>
+                  <span className="text-[10px] text-muted-foreground">Verify login/logout & DB updates</span>
+                </div>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Render Manager Dashboard
+  if (hasRole("Manager") && dashboardData) {
+    const { kpis, team_attendance_summary } = dashboardData;
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Manager Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Operation metrics and productivity for assigned project teams.</p>
+        </div>
+
+        {/* KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Team Members", value: kpis.team_size, icon: Users, color: "text-brand-400 bg-brand-500/10" },
+            { label: "Today Clocked-In", value: kpis.team_present_today, icon: Clock, color: "text-purple-400 bg-purple-500/10" },
+            { label: "Productivity Score", value: kpis.team_productivity_score, icon: Activity, color: "text-emerald-400 bg-emerald-500/10" },
+            { label: "Awaiting Review", value: kpis.pending_production_approvals + kpis.pending_document_approvals, icon: AlertCircle, color: "text-amber-400 bg-amber-500/10" },
+          ].map((card, idx) => (
+            <div key={idx} className="rounded-xl border border-border bg-card/60 backdrop-blur-md p-5 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{card.label}</span>
+                <div className="text-3xl font-bold text-foreground mt-1">{card.value}</div>
+              </div>
+              <div className={cn("h-11 w-11 rounded-lg flex items-center justify-center shrink-0", card.color)}>
+                <card.icon className="h-5 w-5" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Team Attendance Rate */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4 lg:col-span-2">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <CheckCircle className="text-emerald-400 h-5 w-5" />
+              Team Shift Health
+            </h3>
+            <div className="flex items-center gap-6 py-6">
+              <div className="h-28 w-28 rounded-full border-8 border-purple-500/10 border-t-purple-500 flex items-center justify-center">
+                <span className="text-xl font-bold text-foreground">
+                  {kpis.team_size > 0 ? Math.round((kpis.team_present_today / kpis.team_size) * 100) : 0}%
+                </span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-purple-500" />
+                  <span className="text-xs text-muted-foreground">{team_attendance_summary.present} Clocked-In</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-slate-700" />
+                  <span className="text-xs text-muted-foreground">{team_attendance_summary.absent} Away</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Tasks */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-bold text-foreground">Manager Reviews</h3>
+            <div className="space-y-3">
+              <Link href="/production/approval" className="flex items-center justify-between p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
+                <div>
+                  <div className="text-xs font-bold">Approve Detailing Logs</div>
+                  <span className="text-[10px] text-muted-foreground">{kpis.pending_production_approvals} logs submitted</span>
+                </div>
+                <div className="bg-amber-500/10 text-amber-400 text-xs px-2 py-0.5 rounded border border-amber-500/30">Review</div>
+              </Link>
+              <Link href="/documents" className="flex items-center justify-between p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
+                <div>
+                  <div className="text-xs font-bold">Document Approvals</div>
+                  <span className="text-[10px] text-muted-foreground">{kpis.pending_document_approvals} reviews assigned</span>
+                </div>
+                <div className="bg-amber-500/10 text-amber-400 text-xs px-2 py-0.5 rounded border border-amber-500/30">Review</div>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Employee Dashboard
+  if (dashboardData) {
+    const { today_attendance, assigned_projects, production_summary, leave_status, recent_documents } = dashboardData;
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Welcome back, {user?.full_name}</h1>
+            <p className="text-sm text-muted-foreground mt-1">Here is your shift health and project status for today.</p>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card">
+            <Clock className="text-brand-400 h-5 w-5" />
+            <div>
+              <div className="text-xs text-muted-foreground uppercase">Shift status</div>
+              <div className="text-xs font-bold text-foreground">{today_attendance.status}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Assigned Projects", value: assigned_projects.length, icon: FolderKanban, color: "text-emerald-400 bg-emerald-500/10" },
+            { label: "Total Sheets Detailing", value: production_summary.total_quantity, icon: Factory, color: "text-brand-400 bg-brand-500/10" },
+            { label: "Total Approved Tonnage", value: `${production_summary.total_tonnage} MT`, icon: Activity, color: "text-purple-400 bg-purple-500/10" },
+            { label: "Leaves Taken", value: leave_status.approved, icon: CheckCircle, color: "text-emerald-400 bg-emerald-500/10" },
+          ].map((card, idx) => (
+            <div key={idx} className="rounded-xl border border-border bg-card p-5 shadow-sm flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{card.label}</span>
+                <div className="text-2xl font-bold text-foreground mt-1">{card.value}</div>
+              </div>
+              <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center shrink-0", card.color)}>
+                <card.icon className="h-5 w-5" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Assigned Projects & Documents */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Projects */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+            <h3 className="text-sm font-bold text-foreground">Assigned Projects</h3>
+            <div className="space-y-2">
+              {assigned_projects.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">No active assignments.</div>
+              ) : (
+                assigned_projects.map((p: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-500/5 border border-border">
+                    <div>
+                      <div className="text-xs font-bold text-foreground">{p.project_name}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{p.project_code} • {p.role}</div>
+                    </div>
+                    <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">{p.allocation}%</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Recent Documents */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-3 lg:col-span-2">
+            <h3 className="text-sm font-bold text-foreground">Recent Documents & Revisions</h3>
+            <div className="space-y-2">
+              {recent_documents.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">No recent documents uploaded.</div>
+              ) : (
+                recent_documents.map((doc: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-500/5 border border-border">
+                    <div>
+                      <div className="text-xs font-bold text-foreground">{doc.title}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{doc.document_number} • {doc.type}</div>
+                    </div>
+                    <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded border border-border/60", doc.status === "Approved" ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400")}>{doc.status}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
+import { getProductionEntries, approveProductionEntry, rejectProductionEntry } from "@/lib/api/production";
+import type { ProductionEntry } from "@/lib/api/production";
 import { Dialog } from "@/components/layout/Dialog";
-import { ProductionEntry } from "@/types/production";
 import {
   FileCheck2,
   Check,
@@ -23,46 +23,44 @@ export default function ProductionApprovalPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
-    setEntries(mockService.getProductionEntries());
-  };
-
-  const handleApprove = (id: string) => {
-    mockService.updateProductionStatus(id, "Approved");
-    loadData();
-    if (isDetailsOpen && selectedEntry?.id === id) {
-      setSelectedEntry((prev) => prev ? { ...prev, status: "Approved" } : null);
+  const loadData = async () => {
+    try {
+      const data = await getProductionEntries();
+      setEntries(data);
+    } catch (err) {
+      console.error("Failed to load production entries", err);
     }
   };
 
-  const handleReject = (id: string) => {
+  const handleApprove = async (id: string) => {
+    try {
+      const updated = await approveProductionEntry(id);
+      loadData();
+      if (isDetailsOpen && selectedEntry?.id === id) {
+        setSelectedEntry(updated);
+      }
+    } catch (err) {
+      console.error("Failed to approve entry", err);
+    }
+  };
+
+  const handleReject = async (id: string) => {
     const reason = prompt("Enter reason for rejection:") || "";
-    mockService.updateProductionStatus(id, "Rejected", reason);
-    loadData();
-    if (isDetailsOpen && selectedEntry?.id === id) {
-      setSelectedEntry((prev) => prev ? { ...prev, status: "Rejected", rejection_reason: reason } : null);
+    if (!reason) return;
+    try {
+      const updated = await rejectProductionEntry(id, reason);
+      loadData();
+      if (isDetailsOpen && selectedEntry?.id === id) {
+        setSelectedEntry(updated);
+      }
+    } catch (err) {
+      console.error("Failed to reject entry", err);
     }
   };
 
   const handleOpenDetails = (entry: ProductionEntry) => {
     setSelectedEntry(entry);
     setIsDetailsOpen(true);
-  };
-
-  // Helper resolvers
-  const getEmployeeName = (id: string) => {
-    const emp = mockService.getEmployees().find((e) => e.id === id);
-    return emp ? emp.full_name : "Unknown Staff";
-  };
-
-  const getProjectName = (id: string) => {
-    const p = mockService.getProjects().find((proj) => proj.id === id);
-    return p ? p.name : "Unknown Project";
-  };
-
-  const getDrawingCategoryName = (id: string) => {
-    const c = mockService.getDrawingCategories().find((cat) => cat.id === id);
-    return c ? c.name : "Unknown Category";
   };
 
   const filteredEntries = entries.filter((e) => e.status === activeTab);
@@ -125,9 +123,9 @@ export default function ProductionApprovalPage() {
               filteredEntries.map((e) => (
                 <tr key={e.id} className="hover:bg-slate-500/5 transition-colors">
                   <td className="px-6 py-4 font-mono text-foreground">{e.date}</td>
-                  <td className="px-6 py-4 text-foreground font-medium">{getEmployeeName(e.employee_id)}</td>
-                  <td className="px-6 py-4 text-foreground font-semibold">{getProjectName(e.project_id)}</td>
-                  <td className="px-6 py-4 text-muted-foreground">{getDrawingCategoryName(e.drawing_category_id)}</td>
+                  <td className="px-6 py-4 text-foreground font-medium">{e.employee_name}</td>
+                  <td className="px-6 py-4 text-foreground font-semibold">{e.project_code} - {e.project_name}</td>
+                  <td className="px-6 py-4 text-muted-foreground">{e.drawing_category_name}</td>
                   <td className="px-6 py-4">
                     <div className="text-foreground font-semibold">{e.quantity} Sheets</div>
                     <div className="text-xs text-muted-foreground">{e.tonnage ? `${e.tonnage} Tons` : "0.0 Tons"}</div>
@@ -167,7 +165,7 @@ export default function ProductionApprovalPage() {
           </tbody>
         </table>
       </div>
-
+ 
       {/* DETAILS DIALOG */}
       <Dialog isOpen={isDetailsOpen} onClose={() => setIsDetailsOpen(false)} title="Production Log Details" size="sm">
         {selectedEntry && (
@@ -195,11 +193,11 @@ export default function ProductionApprovalPage() {
               </div>
               <div className="col-span-2">
                 <span className="text-xs font-semibold text-muted-foreground">Project</span>
-                <div className="font-semibold mt-0.5 text-foreground">{getProjectName(selectedEntry.project_id)}</div>
+                <div className="font-semibold mt-0.5 text-foreground">{selectedEntry.project_code} - {selectedEntry.project_name}</div>
               </div>
               <div className="col-span-2">
                 <span className="text-xs font-semibold text-muted-foreground">Draftsman</span>
-                <div className="font-semibold mt-0.5 text-foreground">{getEmployeeName(selectedEntry.employee_id)}</div>
+                <div className="font-semibold mt-0.5 text-foreground">{selectedEntry.employee_name}</div>
               </div>
               <div>
                 <span className="text-xs font-semibold text-muted-foreground">Quantity</span>
@@ -212,7 +210,7 @@ export default function ProductionApprovalPage() {
               <div className="col-span-2">
                 <span className="text-xs font-semibold text-muted-foreground">Drawing Category</span>
                 <div className="font-medium mt-0.5 text-foreground">
-                  {getDrawingCategoryName(selectedEntry.drawing_category_id)}
+                  {selectedEntry.drawing_category_name}
                 </div>
               </div>
               {selectedEntry.remarks && (

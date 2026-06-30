@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
-import { ProductionEntry } from "@/types/production";
+import { getProductionEntries } from "@/lib/api/production";
+import type { ProductionEntry } from "@/lib/api/production";
+import { getProjects } from "@/lib/api/projects";
+import { getEmployees } from "@/lib/api/employees";
 import { Project } from "@/types/projects";
 import { User } from "@/types/user";
 import {
@@ -19,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 export default function ProductionHistoryPage() {
   const [entries, setEntries] = useState<ProductionEntry[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [employees, setEmployees] = useState<User[]>([]);
 
   // Filters
@@ -28,35 +30,32 @@ export default function ProductionHistoryPage() {
   const [selectedEmp, setSelectedEmp] = useState("all");
 
   useEffect(() => {
-    setEntries(mockService.getProductionEntries().filter((e) => e.status === "Approved"));
-    setProjects(mockService.getProjects());
-    setEmployees(mockService.getEmployees());
+    async function loadData() {
+      try {
+        const [prodData, projData, empData] = await Promise.all([
+          getProductionEntries({ status: "Approved" }),
+          getProjects(),
+          getEmployees()
+        ]);
+        setEntries(prodData);
+        setProjects(projData);
+        setEmployees(empData);
+      } catch (err) {
+        console.error("Failed to load history page data", err);
+      }
+    }
+    loadData();
   }, []);
 
-  const getEmployeeName = (id: string) => {
-    const emp = employees.find((e) => e.id === id);
-    return emp ? emp.full_name : "Unknown Employee";
-  };
-
-  const getProjectCode = (id: string) => {
-    const p = projects.find((proj) => proj.id === id);
-    return p ? p.code : "—";
-  };
-
-  const getProjectName = (id: string) => {
-    const p = projects.find((proj) => proj.id === id);
-    return p ? p.name : "Unknown";
-  };
-
   const filteredEntries = entries.filter((e) => {
-    const draftsman = getEmployeeName(e.employee_id).toLowerCase();
-    const proj = getProjectName(e.project_id).toLowerCase();
+    const draftsman = e.employee_name.toLowerCase();
+    const proj = e.project_name.toLowerCase();
     const remarks = (e.remarks || "").toLowerCase();
     const query = searchQuery.toLowerCase();
 
     const matchesSearch = draftsman.includes(query) || proj.includes(query) || remarks.includes(query);
     const matchesProj = selectedProj === "all" || e.project_id === selectedProj;
-    const matchesEmp = selectedEmp === "all" || e.employee_id === selectedEmp;
+    const matchesEmp = selectedEmp === "all" || e.employee === selectedEmp;
 
     return matchesSearch && matchesProj && matchesEmp;
   });
@@ -65,7 +64,7 @@ export default function ProductionHistoryPage() {
   const totalSheets = filteredEntries.reduce((sum, e) => sum + e.quantity, 0);
   const totalTonnage = filteredEntries.reduce((sum, e) => sum + e.tonnage, 0);
   const averageTonnagePerSheet = totalSheets > 0 ? (totalTonnage / totalSheets).toFixed(2) : "0.00";
-  const activeStaffCount = new Set(filteredEntries.map((e) => e.employee_id)).size;
+  const activeStaffCount = new Set(filteredEntries.map((e) => e.employee)).size;
 
   // Render SVG Productivity chart data
   // Group tonnage/drawings by date for the last 5 logs
@@ -225,8 +224,8 @@ export default function ProductionHistoryPage() {
                           {e.date}
                         </div>
                         <h4 className="text-sm font-bold text-foreground mt-1">
-                          {getEmployeeName(e.employee_id)} logged {e.quantity} Sheets for{" "}
-                          <span className="text-brand-400">{getProjectCode(e.project_id)}</span>
+                          {e.employee_name} logged {e.quantity} Sheets for{" "}
+                          <span className="text-brand-400">{e.project_code}</span>
                         </h4>
                         <p className="text-xs text-muted-foreground mt-1">{e.remarks || "No remarks provided"}</p>
                       </div>

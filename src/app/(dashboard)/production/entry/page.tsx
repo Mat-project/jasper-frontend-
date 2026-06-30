@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
+import { getEmployees } from "@/lib/api/employees";
+import { getProjects } from "@/lib/api/projects";
+import { getDrawingCategories } from "@/lib/api/masters";
+import { createProductionEntry } from "@/lib/api/production";
 import { User } from "@/types/user";
 import { Project } from "@/types/projects";
 import { DrawingCategory } from "@/types/masters";
@@ -10,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 export default function ProductionEntryPage() {
   const [employees, setEmployees] = useState<User[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [categories, setCategories] = useState<DrawingCategory[]>([]);
 
   // Form State
@@ -27,23 +30,36 @@ export default function ProductionEntryPage() {
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-    const activeEmps = mockService.getEmployees().filter((e) => e.is_active);
-    const activeProjs = mockService.getProjects().filter((p) => p.status === "Active" || p.status === "Planned");
-    
-    setEmployees(activeEmps);
-    setProjects(activeProjs);
-    setCategories(mockService.getDrawingCategories());
+    async function loadData() {
+      try {
+        const [emps, projs, cats] = await Promise.all([
+          getEmployees(),
+          getProjects(),
+          getDrawingCategories()
+        ]);
+        
+        const activeEmps = emps.filter((e) => e.is_active);
+        const activeProjs = projs.filter((p) => p.status === "Active" || p.status === "Planned");
+        
+        setEmployees(activeEmps);
+        setProjects(activeProjs);
+        setCategories(cats);
 
-    // Defaults
-    setForm((prev) => ({
-      ...prev,
-      employee_id: activeEmps[0]?.id || "",
-      project_id: activeProjs[0]?.id || "",
-      drawing_category_id: mockService.getDrawingCategories()[0]?.id || "",
-    }));
+        // Defaults
+        setForm((prev) => ({
+          ...prev,
+          employee_id: activeEmps[0]?.id || "",
+          project_id: activeProjs[0]?.id || "",
+          drawing_category_id: cats[0]?.id || "",
+        }));
+      } catch (err) {
+        console.error("Failed to load initial form data", err);
+      }
+    }
+    loadData();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent, submit = false) => {
+  const handleSubmit = async (e: React.FormEvent, submit = false) => {
     e.preventDefault();
     setNotification(null);
 
@@ -57,7 +73,10 @@ export default function ProductionEntryPage() {
     }
 
     try {
-      mockService.createProductionEntry(form, submit);
+      await createProductionEntry({
+        ...form,
+        status: submit ? "Submitted" : "Draft"
+      });
       setNotification({
         type: "success",
         message: submit
@@ -75,7 +94,7 @@ export default function ProductionEntryPage() {
     } catch (err: any) {
       setNotification({
         type: "error",
-        message: err.message || "Failed to log production entry.",
+        message: err.response?.data?.rejection_reason || err.message || "Failed to log production entry.",
       });
     }
   };

@@ -1,138 +1,142 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
-import { Project } from "@/types/projects";
-import { User } from "@/types/user";
-import { Department } from "@/types/masters";
-import {
-  BarChart3,
-  Calendar,
-  FileSpreadsheet,
-  FileText,
-  Filter,
-  CheckCircle,
-} from "lucide-react";
+import { getReport, downloadReportCSV } from "@/lib/api/reports";
+import { getProjects } from "@/lib/api/projects";
+import { getEmployees } from "@/lib/api/employees";
+import { BarChart3, Filter, FileSpreadsheet, Download, RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ReportType =
-  | "Daily Production"
-  | "Monthly Production"
-  | "Employee Productivity"
-  | "Attendance"
-  | "Project"
-  | "Revision";
+  | "employees"
+  | "attendance"
+  | "leaves"
+  | "projects"
+  | "production"
+  | "revisions"
+  | "billing"
+  | "productivity";
 
 export default function ReportsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [employees, setEmployees] = useState<User[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Selection
-  const [selectedReport, setSelectedReport] = useState<ReportType>("Daily Production");
+  const [selectedReport, setSelectedReport] = useState<ReportType>("employees");
   
   // Filters
   const [filters, setFilters] = useState({
-    startDate: new Date().toISOString().split("T")[0],
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0],
     endDate: new Date().toISOString().split("T")[0],
-    project: "all",
-    department: "all",
-    employee: "all",
+    project: "",
+    employee: "",
+    status: "",
   });
 
-  const [generatedReport, setGeneratedReport] = useState<any[] | null>(null);
-  const [isExporting, setIsExporting] = useState<"excel" | "pdf" | null>(null);
+  const [reportData, setReportData] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
 
+  // Load masters for filtering
   useEffect(() => {
-    setProjects(mockService.getProjects());
-    setEmployees(mockService.getEmployees());
-    setDepartments(mockService.getDepartments());
+    getProjects()
+      .then((data) => setProjects(Array.isArray(data) ? data : []))
+      .catch((err) => console.error("Projects load failed:", err));
+
+    getEmployees()
+      .then((data) => setEmployees(Array.isArray(data) ? data : []))
+      .catch((err) => console.error("Employees load failed:", err));
   }, []);
 
-  const handleGenerate = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Create random mock report rows based on selected report type to simulate real data
-    const records = [];
-    if (selectedReport === "Daily Production") {
-      records.push(
-        { date: filters.startDate, code: "PRJ-101", title: "Project Orion", quantity: 12, tonnage: 28.5 },
-        { date: filters.startDate, code: "PRJ-102", title: "Project Apollo", quantity: 8, tonnage: 11.2 }
-      );
-    } else if (selectedReport === "Monthly Production") {
-      records.push(
-        { month: "June 2026", code: "PRJ-101", title: "Project Orion", quantity: 240, tonnage: 580.4 },
-        { month: "June 2026", code: "PRJ-102", title: "Project Apollo", quantity: 185, tonnage: 310.2 }
-      );
-    } else if (selectedReport === "Employee Productivity") {
-      records.push(
-        { code: "EMP-002", name: "John Doe", dept: "Engineering", sheets: 45, tonnage: 112.4 },
-        { code: "EMP-003", name: "Alice Smith", dept: "Production", sheets: 30, tonnage: 64.8 }
-      );
-    } else if (selectedReport === "Attendance") {
-      records.push(
-        { code: "EMP-001", name: "System Admin", present: 22, absent: 0, leave: 0, rate: "100%" },
-        { code: "EMP-002", name: "John Doe", present: 20, absent: 1, leave: 1, rate: "91%" },
-        { code: "EMP-003", name: "Alice Smith", present: 19, absent: 0, leave: 3, rate: "86%" }
-      );
-    } else if (selectedReport === "Project") {
-      records.push(
-        { code: "PRJ-101", name: "Project Orion", client: "Tesla", start: "2026-01-01", end: "2026-12-31", status: "In Progress" },
-        { code: "PRJ-102", name: "Project Apollo", client: "SpaceX", start: "2026-03-15", end: "2026-09-15", status: "In Progress" }
-      );
-    } else if (selectedReport === "Revision") {
-      records.push(
-        { code: "PRJ-101", drw: "DRW-ORION-001", type: "Internal Revision", date: "2026-06-25", billable: "No" },
-        { code: "PRJ-101", drw: "DRW-ORION-002", type: "Client Revision", date: "2026-06-27", billable: "Yes" }
-      );
-    }
+  const handleGenerate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      // Build API params
+      const params: Record<string, any> = {
+        page,
+      };
+      if (filters.startDate) params.start_date = filters.startDate;
+      if (filters.endDate) params.end_date = filters.endDate;
+      if (filters.project) params.project = filters.project;
+      if (filters.employee) params.employee = filters.employee;
+      if (filters.status) params.status = filters.status;
 
-    setGeneratedReport(records);
+      const data = await getReport(selectedReport, params);
+      if (data && data.results) {
+        setReportData(data.results);
+        setTotalCount(data.count || data.results.length);
+      } else if (Array.isArray(data)) {
+        setReportData(data);
+        setTotalCount(data.length);
+      } else {
+        setReportData([]);
+        setTotalCount(0);
+      }
+    } catch (err: any) {
+      console.error("Report generation failed:", err);
+      setError("Failed to fetch report data. Please check connection.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleExport = (type: "excel" | "pdf") => {
-    setIsExporting(type);
-    setTimeout(() => {
-      setIsExporting(null);
-      alert(`Report exported successfully as ${type.toUpperCase()}!`);
-    }, 1500);
+  useEffect(() => {
+    handleGenerate();
+  }, [selectedReport, page]);
+
+  const handleCSVExport = () => {
+    const params: Record<string, any> = {};
+    if (filters.startDate) params.start_date = filters.startDate;
+    if (filters.endDate) params.end_date = filters.endDate;
+    if (filters.project) params.project = filters.project;
+    if (filters.employee) params.employee = filters.employee;
+    if (filters.status) params.status = filters.status;
+
+    downloadReportCSV(selectedReport, params);
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Operational Reports</h1>
+        <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Enterprise Reporting</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Generate, review, and export structural detailing metrics, timesheets, and revisions schedules.
+          Detailed filters, paginated results, and instant CSV export for auditing and PM reviews.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left: Settings Panel */}
-        <div className="lg:col-span-1 bg-card border border-border rounded-xl p-5 space-y-4">
+        {/* Left: Filters Panel */}
+        <div className="lg:col-span-1 bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
           <div className="flex items-center gap-2 pb-3 border-b border-border">
             <Filter className="h-5 w-5 text-brand-400" />
             <h3 className="text-sm font-bold text-foreground">Report Config</h3>
           </div>
 
-          <form onSubmit={handleGenerate} className="space-y-4">
+          <form onSubmit={(e) => { setPage(1); handleGenerate(e); }} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">Report Type</label>
               <select
                 value={selectedReport}
                 onChange={(e) => {
                   setSelectedReport(e.target.value as ReportType);
-                  setGeneratedReport(null);
+                  setReportData([]);
+                  setPage(1);
                 }}
                 className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
               >
-                <option value="Daily Production">Daily Production Report</option>
-                <option value="Monthly Production">Monthly Production Report</option>
-                <option value="Employee Productivity">Employee Productivity Report</option>
-                <option value="Attendance">Attendance Report</option>
-                <option value="Project">Project Report</option>
-                <option value="Revision">Revision Report</option>
+                <option value="employees">Employee List Report</option>
+                <option value="attendance">Attendance Records</option>
+                <option value="leaves">Leave Requests</option>
+                <option value="projects">Projects List</option>
+                <option value="production">Production Entries</option>
+                <option value="revisions">Document Revisions</option>
+                <option value="billing">Revision Billing</option>
+                <option value="productivity">Employee Productivity</option>
               </select>
             </div>
 
@@ -163,26 +167,10 @@ export default function ReportsPage() {
                 onChange={(e) => setFilters({ ...filters, project: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
               >
-                <option value="all">All Projects</option>
+                <option value="">All Projects</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.code}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Department</label>
-              <select
-                value={filters.department}
-                onChange={(e) => setFilters({ ...filters, department: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
-              >
-                <option value="all">All Departments</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.name}>
-                    {d.name}
+                    {p.code} - {p.name}
                   </option>
                 ))}
               </select>
@@ -195,178 +183,246 @@ export default function ReportsPage() {
                 onChange={(e) => setFilters({ ...filters, employee: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
               >
-                <option value="all">All Staff</option>
+                <option value="">All Staff</option>
                 {employees.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.full_name}
+                    {e.full_name || e.email}
                   </option>
                 ))}
               </select>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">Status</label>
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
+              >
+                <option value="">Any Status</option>
+                <option value="Approved">Approved</option>
+                <option value="Pending">Pending</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Submitted">Submitted</option>
+              </select>
+            </div>
+
             <button
               type="submit"
-              className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-semibold shadow-md transition-colors"
+              className="w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-semibold shadow-md transition-colors flex items-center justify-center gap-2"
             >
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
               Generate Report
             </button>
           </form>
         </div>
 
         {/* Right: Output Table */}
-        <div className="lg:col-span-3 bg-card border border-border rounded-xl p-5 flex flex-col justify-between">
+        <div className="lg:col-span-3 bg-card border border-border rounded-xl p-5 shadow-sm flex flex-col justify-between min-h-[400px]">
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-brand-400" />
-                <h3 className="text-sm font-bold text-foreground">Report Output: {selectedReport}</h3>
+                <h3 className="text-sm font-bold text-foreground">Report Output</h3>
               </div>
 
-              {generatedReport && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleExport("excel")}
-                    disabled={isExporting !== null}
-                    className="flex items-center gap-1 px-3 py-1.5 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 rounded text-xs font-semibold disabled:opacity-50"
-                  >
-                    <FileSpreadsheet className="h-3.5 w-3.5" />
-                    {isExporting === "excel" ? "Exporting..." : "Excel"}
-                  </button>
-                  <button
-                    onClick={() => handleExport("pdf")}
-                    disabled={isExporting !== null}
-                    className="flex items-center gap-1 px-3 py-1.5 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded text-xs font-semibold disabled:opacity-50"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    {isExporting === "pdf" ? "Exporting..." : "PDF"}
-                  </button>
-                </div>
+              {reportData.length > 0 && (
+                <button
+                  onClick={handleCSVExport}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 rounded-lg text-xs font-semibold transition-colors"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export CSV
+                </button>
               )}
             </div>
 
+            {error && (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 flex items-center gap-3">
+                <AlertCircle className="text-destructive h-5 w-5 shrink-0" />
+                <p className="text-xs text-destructive-foreground">{error}</p>
+              </div>
+            )}
+
             {/* Table wrapper */}
             <div className="overflow-x-auto">
-              {!generatedReport ? (
+              {loading ? (
+                <div className="py-24 text-center text-xs text-muted-foreground animate-pulse">
+                  Querying database logs...
+                </div>
+              ) : reportData.length === 0 ? (
                 <div className="py-24 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
-                  Configure the filters and click &quot;Generate Report&quot; to load data.
+                  No records matching the selected filters.
                 </div>
               ) : (
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-50 dark:bg-slate-900 border-b border-border">
-                    {selectedReport === "Daily Production" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Date</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Project Code</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Project Name</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Sheets</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Tonnage (MT)</th>
-                      </tr>
-                    )}
-                    {selectedReport === "Monthly Production" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Month</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Project Code</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Project Name</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Sheets</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Tonnage (MT)</th>
-                      </tr>
-                    )}
-                    {selectedReport === "Employee Productivity" && (
+                    {selectedReport === "employees" && (
                       <tr>
                         <th className="p-3 font-semibold text-muted-foreground">Code</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Draftsman</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Name</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Email</th>
                         <th className="p-3 font-semibold text-muted-foreground">Department</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Sheets Approved</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Tonnage (MT)</th>
-                      </tr>
-                    )}
-                    {selectedReport === "Attendance" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Code</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Employee Name</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Present Days</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Absent Days</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Leave Days</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Attendance Rate</th>
-                      </tr>
-                    )}
-                    {selectedReport === "Project" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Code</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Project Name</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Client</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Start</th>
-                        <th className="p-3 font-semibold text-muted-foreground">End</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Section</th>
                         <th className="p-3 font-semibold text-muted-foreground">Status</th>
                       </tr>
                     )}
-                    {selectedReport === "Revision" && (
+                    {selectedReport === "attendance" && (
                       <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Project</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Drawing Number</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Revision Type</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Code</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Employee</th>
                         <th className="p-3 font-semibold text-muted-foreground">Date</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Billable</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Check-In</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Check-Out</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Hours</th>
+                      </tr>
+                    )}
+                    {selectedReport === "leaves" && (
+                      <tr>
+                        <th className="p-3 font-semibold text-muted-foreground">Employee</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Type</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Start</th>
+                        <th className="p-3 font-semibold text-muted-foreground">End</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Days</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
+                      </tr>
+                    )}
+                    {selectedReport === "projects" && (
+                      <tr>
+                        <th className="p-3 font-semibold text-muted-foreground">Code</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Name</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Client</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Start</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Budget</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
+                      </tr>
+                    )}
+                    {selectedReport === "production" && (
+                      <tr>
+                        <th className="p-3 font-semibold text-muted-foreground">Date</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Employee</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Project</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Category</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Sheets</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Tons</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
+                      </tr>
+                    )}
+                    {selectedReport === "revisions" && (
+                      <tr>
+                        <th className="p-3 font-semibold text-muted-foreground">Doc Number</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Title</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Rev No</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Reason</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Effective Date</th>
+                      </tr>
+                    )}
+                    {selectedReport === "billing" && (
+                      <tr>
+                        <th className="p-3 font-semibold text-muted-foreground">Doc Number</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Title</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Rev No</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Amount</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Invoice Ref</th>
+                      </tr>
+                    )}
+                    {selectedReport === "productivity" && (
+                      <tr>
+                        <th className="p-3 font-semibold text-muted-foreground">Code</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Name</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Assignments</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Allocation %</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Tons Detailing</th>
+                        <th className="p-3 font-semibold text-muted-foreground">Score</th>
                       </tr>
                     )}
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {generatedReport.map((row, idx) => (
+                    {reportData.map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-500/5 transition-colors">
-                        {selectedReport === "Daily Production" && (
+                        {selectedReport === "employees" && (
                           <>
+                            <td className="p-3 font-mono">{row.employee_code || "—"}</td>
+                            <td className="p-3 font-medium text-foreground">{row.full_name}</td>
+                            <td className="p-3 text-muted-foreground">{row.email}</td>
+                            <td className="p-3">{row.department_name || "—"}</td>
+                            <td className="p-3">{row.section_name || "—"}</td>
+                            <td className="p-3 font-semibold">{row.is_active ? "Active" : "Inactive"}</td>
+                          </>
+                        )}
+                        {selectedReport === "attendance" && (
+                          <>
+                            <td className="p-3 font-mono">{row.employee_code || "—"}</td>
+                            <td className="p-3 font-medium text-foreground">{row.employee_name}</td>
                             <td className="p-3 font-mono">{row.date}</td>
-                            <td className="p-3 font-mono font-semibold">{row.code}</td>
-                            <td className="p-3 font-medium text-foreground">{row.title}</td>
-                            <td className="p-3 font-semibold">{row.quantity}</td>
-                            <td className="p-3 font-semibold text-brand-400">{row.tonnage} MT</td>
+                            <td className="p-3 font-semibold">{row.status}</td>
+                            <td className="p-3 font-mono">{row.check_in || "—"}</td>
+                            <td className="p-3 font-mono">{row.check_out || "—"}</td>
+                            <td className="p-3">{row.working_hours} hrs</td>
                           </>
                         )}
-                        {selectedReport === "Monthly Production" && (
+                        {selectedReport === "leaves" && (
                           <>
-                            <td className="p-3 font-mono">{row.month}</td>
-                            <td className="p-3 font-mono font-semibold">{row.code}</td>
-                            <td className="p-3 font-medium text-foreground">{row.title}</td>
-                            <td className="p-3 font-semibold">{row.quantity}</td>
-                            <td className="p-3 font-semibold text-brand-400">{row.tonnage} MT</td>
+                            <td className="p-3 font-medium text-foreground">{row.employee_name}</td>
+                            <td className="p-3">{row.leave_type}</td>
+                            <td className="p-3 font-mono">{row.start_date}</td>
+                            <td className="p-3 font-mono">{row.end_date}</td>
+                            <td className="p-3 font-semibold">{row.days_count}</td>
+                            <td className="p-3 font-semibold">{row.status}</td>
                           </>
                         )}
-                        {selectedReport === "Employee Productivity" && (
-                          <>
-                            <td className="p-3 font-mono">{row.code}</td>
-                            <td className="p-3 font-medium text-foreground">{row.name}</td>
-                            <td className="p-3 text-muted-foreground">{row.dept}</td>
-                            <td className="p-3 font-semibold">{row.sheets}</td>
-                            <td className="p-3 font-semibold text-brand-400">{row.tonnage} MT</td>
-                          </>
-                        )}
-                        {selectedReport === "Attendance" && (
-                          <>
-                            <td className="p-3 font-mono">{row.code}</td>
-                            <td className="p-3 font-medium text-foreground">{row.name}</td>
-                            <td className="p-3">{row.present}</td>
-                            <td className="p-3">{row.absent}</td>
-                            <td className="p-3">{row.leave}</td>
-                            <td className="p-3 font-semibold text-brand-400">{row.rate}</td>
-                          </>
-                        )}
-                        {selectedReport === "Project" && (
+                        {selectedReport === "projects" && (
                           <>
                             <td className="p-3 font-mono font-semibold">{row.code}</td>
                             <td className="p-3 font-medium text-foreground">{row.name}</td>
                             <td className="p-3 text-muted-foreground">{row.client}</td>
-                            <td className="p-3 font-mono">{row.start}</td>
-                            <td className="p-3 font-mono">{row.end}</td>
+                            <td className="p-3 font-mono">{row.start_date}</td>
+                            <td className="p-3">₹{row.budget?.toLocaleString() || 0}</td>
                             <td className="p-3 font-semibold">{row.status}</td>
                           </>
                         )}
-                        {selectedReport === "Revision" && (
+                        {selectedReport === "production" && (
                           <>
-                            <td className="p-3 font-mono font-semibold">{row.code}</td>
-                            <td className="p-3 font-medium text-foreground font-mono">{row.drw}</td>
-                            <td className="p-3">{row.type}</td>
                             <td className="p-3 font-mono">{row.date}</td>
-                            <td className="p-3 font-semibold">{row.billable}</td>
+                            <td className="p-3 font-medium text-foreground">{row.employee_name}</td>
+                            <td className="p-3 font-mono">{row.project_code}</td>
+                            <td className="p-3">{row.drawing_category_name}</td>
+                            <td className="p-3 font-semibold">{row.quantity}</td>
+                            <td className="p-3 font-semibold text-brand-400">{row.tonnage} MT</td>
+                            <td className="p-3 font-semibold">{row.status}</td>
+                          </>
+                        )}
+                        {selectedReport === "revisions" && (
+                          <>
+                            <td className="p-3 font-mono">{row.document_number}</td>
+                            <td className="p-3 font-medium text-foreground">{row.document_title}</td>
+                            <td className="p-3 font-semibold">{row.revision_number}</td>
+                            <td className="p-3 text-muted-foreground">{row.revision_reason}</td>
+                            <td className="p-3 font-semibold">{row.status}</td>
+                            <td className="p-3 font-mono">{row.effective_date || "—"}</td>
+                          </>
+                        )}
+                        {selectedReport === "billing" && (
+                          <>
+                            <td className="p-3 font-mono">{row.document_number}</td>
+                            <td className="p-3 font-medium text-foreground">{row.document_title}</td>
+                            <td className="p-3 font-semibold">{row.revision_number}</td>
+                            <td className="p-3 font-semibold">₹{row.charge_amount?.toLocaleString() || 0}</td>
+                            <td className="p-3 font-semibold">{row.payment_status}</td>
+                            <td className="p-3 font-mono">{row.invoice_reference || "—"}</td>
+                          </>
+                        )}
+                        {selectedReport === "productivity" && (
+                          <>
+                            <td className="p-3 font-mono">{row.employee_code || "—"}</td>
+                            <td className="p-3 font-medium text-foreground">{row.employee_name}</td>
+                            <td className="p-3">{row.assignments_count}</td>
+                            <td className="p-3">{row.total_allocation}%</td>
+                            <td className="p-3 font-semibold text-brand-400">{row.total_tonnage} MT</td>
+                            <td className="p-3 font-bold text-emerald-400">{row.productivity_score}</td>
                           </>
                         )}
                       </tr>
@@ -376,6 +432,31 @@ export default function ReportsPage() {
               )}
             </div>
           </div>
+
+          {/* Pagination */}
+          {totalCount > 10 && (
+            <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
+              <span className="text-xs text-muted-foreground">
+                Showing {reportData.length} of {totalCount} records
+              </span>
+              <div className="flex gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                  className="px-3 py-1.5 border border-border rounded text-xs font-semibold hover:bg-slate-500/5 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={page * 10 >= totalCount}
+                  onClick={() => setPage(page + 1)}
+                  className="px-3 py-1.5 border border-border rounded text-xs font-semibold hover:bg-slate-500/5 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

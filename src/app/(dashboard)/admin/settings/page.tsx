@@ -1,46 +1,118 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
-import { SystemSettings } from "@/types/admin";
-import {
-  Settings,
-  ShieldAlert,
-  Users2,
-  Save,
-  CheckCircle,
-} from "lucide-react";
+import { getSystemSettings, updateSystemSetting, createSystemSetting } from "@/lib/api/settings";
+import { Settings, ShieldAlert, Users2, Save, CheckCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"general" | "user" | "security">("general");
   const [isSaved, setIsSaved] = useState(false);
 
-  useEffect(() => {
-    setSettings(mockService.getSettings());
-  }, []);
+  // Form State
+  const [generalValues, setGeneralValues] = useState({
+    siteName: "EOMS Portal",
+    contactEmail: "support@eoms.local",
+    rowsPerPage: 10,
+  });
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!settings) return;
-    mockService.saveSettings(settings);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2000);
+  const [userValues, setUserValues] = useState({
+    allowRegistration: false,
+    requireEmailVerification: true,
+  });
+
+  const [securityValues, setSecurityValues] = useState({
+    passwordMinLength: 8,
+    sessionTimeoutMinutes: 30,
+    mfaRequired: false,
+  });
+
+  const loadSettings = async () => {
+    setLoading(true);
+    try {
+      const data = await getSystemSettings();
+      const settingsMap: Record<string, any> = {};
+      if (Array.isArray(data)) {
+        data.forEach((s: any) => {
+          settingsMap[s.key] = s.value;
+        });
+      }
+
+      if (settingsMap.siteName !== undefined) setGeneralValues(prev => ({ ...prev, siteName: settingsMap.siteName }));
+      if (settingsMap.contactEmail !== undefined) setGeneralValues(prev => ({ ...prev, contactEmail: settingsMap.contactEmail }));
+      if (settingsMap.rowsPerPage !== undefined) setGeneralValues(prev => ({ ...prev, rowsPerPage: settingsMap.rowsPerPage }));
+
+      if (settingsMap.allowRegistration !== undefined) setUserValues(prev => ({ ...prev, allowRegistration: settingsMap.allowRegistration }));
+      if (settingsMap.requireEmailVerification !== undefined) setUserValues(prev => ({ ...prev, requireEmailVerification: settingsMap.requireEmailVerification }));
+
+      if (settingsMap.passwordMinLength !== undefined) setSecurityValues(prev => ({ ...prev, passwordMinLength: settingsMap.passwordMinLength }));
+      if (settingsMap.sessionTimeoutMinutes !== undefined) setSecurityValues(prev => ({ ...prev, sessionTimeoutMinutes: settingsMap.sessionTimeoutMinutes }));
+      if (settingsMap.mfaRequired !== undefined) setSecurityValues(prev => ({ ...prev, mfaRequired: settingsMap.mfaRequired }));
+    } catch (err) {
+      console.error("Failed to load settings:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!settings) return null;
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setIsSaved(false);
+
+    try {
+      // Determine which keys to save based on the active tab
+      let keysToSave: Record<string, any> = {};
+      if (activeTab === "general") {
+        keysToSave = generalValues;
+      } else if (activeTab === "user") {
+        keysToSave = userValues;
+      } else {
+        keysToSave = securityValues;
+      }
+
+      // Update or create each setting
+      for (const [key, value] of Object.entries(keysToSave)) {
+        try {
+          await updateSystemSetting(key, value);
+        } catch {
+          // If PATCH fails (e.g. setting key doesn't exist yet), call POST to create
+          await createSystemSetting(key, value);
+        }
+      }
+
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err) {
+      console.error("Save settings failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <p className="text-sm text-muted-foreground animate-pulse">Loading system settings...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">System Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Configure default layout, registration capabilities, user controls, and session parameters.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-extrabold text-foreground tracking-tight">System Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Configure security baselines, user registration policies, and generic application parameters.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -73,7 +145,7 @@ export default function SettingsPage() {
             {isSaved && (
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-sm flex items-center gap-2 animate-fade-in">
                 <CheckCircle className="h-4 w-4 shrink-0" />
-                <span>Settings saved successfully!</span>
+                <span>Settings saved and audited successfully!</span>
               </div>
             )}
 
@@ -86,14 +158,9 @@ export default function SettingsPage() {
                   <label className="text-xs text-muted-foreground">Portal Name</label>
                   <input
                     type="text"
-                    value={settings.general.siteName}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        general: { ...settings.general, siteName: e.target.value },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={generalValues.siteName}
+                    onChange={(e) => setGeneralValues({ ...generalValues, siteName: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
                   />
                 </div>
 
@@ -101,14 +168,9 @@ export default function SettingsPage() {
                   <label className="text-xs text-muted-foreground">Support Contact Email</label>
                   <input
                     type="email"
-                    value={settings.general.contactEmail}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        general: { ...settings.general, contactEmail: e.target.value },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={generalValues.contactEmail}
+                    onChange={(e) => setGeneralValues({ ...generalValues, contactEmail: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
                   />
                 </div>
 
@@ -118,14 +180,9 @@ export default function SettingsPage() {
                     type="number"
                     min={5}
                     max={100}
-                    value={settings.general.rowsPerPage}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        general: { ...settings.general, rowsPerPage: parseInt(e.target.value) || 10 },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={generalValues.rowsPerPage}
+                    onChange={(e) => setGeneralValues({ ...generalValues, rowsPerPage: parseInt(e.target.value) || 10 })}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
                   />
                 </div>
               </div>
@@ -143,13 +200,8 @@ export default function SettingsPage() {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.user.allowRegistration}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        user: { ...settings.user, allowRegistration: e.target.checked },
-                      })
-                    }
+                    checked={userValues.allowRegistration}
+                    onChange={(e) => setUserValues({ ...userValues, allowRegistration: e.target.checked })}
                     className="rounded border-input text-brand-500 focus:ring-brand-500 h-4 w-4 cursor-pointer"
                   />
                 </div>
@@ -161,13 +213,8 @@ export default function SettingsPage() {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.user.requireEmailVerification}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        user: { ...settings.user, requireEmailVerification: e.target.checked },
-                      })
-                    }
+                    checked={userValues.requireEmailVerification}
+                    onChange={(e) => setUserValues({ ...userValues, requireEmailVerification: e.target.checked })}
                     className="rounded border-input text-brand-500 focus:ring-brand-500 h-4 w-4 cursor-pointer"
                   />
                 </div>
@@ -184,14 +231,9 @@ export default function SettingsPage() {
                   <input
                     type="number"
                     min={6}
-                    value={settings.security.passwordMinLength}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        security: { ...settings.security, passwordMinLength: parseInt(e.target.value) || 8 },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={securityValues.passwordMinLength}
+                    onChange={(e) => setSecurityValues({ ...securityValues, passwordMinLength: parseInt(e.target.value) || 8 })}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
                   />
                 </div>
 
@@ -200,14 +242,9 @@ export default function SettingsPage() {
                   <input
                     type="number"
                     min={5}
-                    value={settings.security.sessionTimeoutMinutes}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        security: { ...settings.security, sessionTimeoutMinutes: parseInt(e.target.value) || 30 },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={securityValues.sessionTimeoutMinutes}
+                    onChange={(e) => setSecurityValues({ ...securityValues, sessionTimeoutMinutes: parseInt(e.target.value) || 30 })}
+                    className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none"
                   />
                 </div>
 
@@ -218,13 +255,8 @@ export default function SettingsPage() {
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.security.mfaRequired}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        security: { ...settings.security, mfaRequired: e.target.checked },
-                      })
-                    }
+                    checked={securityValues.mfaRequired}
+                    onChange={(e) => setSecurityValues({ ...securityValues, mfaRequired: e.target.checked })}
                     className="rounded border-input text-brand-500 focus:ring-brand-500 h-4 w-4 cursor-pointer"
                   />
                 </div>
@@ -235,9 +267,14 @@ export default function SettingsPage() {
             <div className="flex justify-end pt-4 border-t border-border mt-6">
               <button
                 type="submit"
-                className="flex items-center gap-1.5 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg text-sm shadow-md transition-colors"
+                disabled={saving}
+                className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg text-sm shadow-md transition-colors disabled:opacity-50"
               >
-                <Save className="h-4 w-4" />
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
                 Save Settings
               </button>
             </div>

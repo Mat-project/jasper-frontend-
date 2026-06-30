@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 export default function RevisionsPage() {
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
 
   // Search & Filter
   const [search, setSearch] = useState("");

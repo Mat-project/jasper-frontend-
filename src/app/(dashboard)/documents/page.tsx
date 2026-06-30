@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [history, setHistory] = useState<VersionHistory[]>([]);
   const [loading, setLoading] = useState(true);
 
