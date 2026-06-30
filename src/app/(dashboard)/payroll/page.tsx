@@ -12,17 +12,60 @@ import {
   Eye,
 } from "lucide-react";
 import {
-  ENTERPRISE_EMPLOYEES,
-  ENTERPRISE_SALARIES,
-  ENTERPRISE_PAYSLIPS,
   EnterpriseSalaryStructure,
   EnterprisePayslip,
 } from "@/data/mockEnterpriseData";
+import { getPayslips, getSalaryStructures, generatePayslips } from "@/lib/api/payroll";
+import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
 export default function EnterprisePayrollPage() {
-  const [payslips] = useState<EnterprisePayslip[]>(ENTERPRISE_PAYSLIPS);
-  const [salaryStructures] = useState<EnterpriseSalaryStructure[]>(Object.values(ENTERPRISE_SALARIES));
+  const [payslips, setPayslips] = useState<EnterprisePayslip[]>([]);
+  const [salaryStructures, setSalaryStructures] = useState<EnterpriseSalaryStructure[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const [payslipData, structData, empData] = await Promise.all([
+          getPayslips(),
+          getSalaryStructures(),
+          getEmployees(),
+        ]);
+        setPayslips(payslipData);
+        setSalaryStructures(structData);
+        const mappedEmps = empData.map((emp: any) => ({
+          id: emp.id,
+          code: emp.employee_code || emp.id.substring(0, 8),
+          first_name: emp.first_name || "",
+          last_name: emp.last_name || "",
+          email: emp.email,
+          phone: emp.phone_number || "",
+          avatar: emp.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+          designation: emp.role || "Engineer",
+          department: emp.department || "Engineering",
+          join_date: emp.date_joined ? emp.date_joined.split("T")[0] : "2026-01-01",
+        }));
+        setEmployees(mappedEmps);
+      } catch (err) {
+        console.error("Failed to load payroll data", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const handleGeneratePayslips = async () => {
+    try {
+      const generated = await generatePayslips("June 2026");
+      setPayslips(generated);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<"payslips" | "structures" | "preview">("payslips");
   const [search, setSearch] = useState("");
   const [selectedPayslip, setSelectedPayslip] = useState<EnterprisePayslip | null>(null);
@@ -33,7 +76,7 @@ export default function EnterprisePayrollPage() {
   const totalOT = payslips.reduce((sum, p) => sum + (p.overtime_pay || 0), 0);
 
   const filteredPayslips = payslips.filter((p) => {
-    const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === p.employee_id);
+    const emp = employees.find((e) => e.id === p.employee_id);
     const name = emp ? `${emp.first_name} ${emp.last_name}`.toLowerCase() : "";
     return name.includes(search.toLowerCase()) || p.employee_id.toLowerCase().includes(search.toLowerCase());
   });
@@ -66,6 +109,12 @@ export default function EnterprisePayrollPage() {
           <span className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-slate-600 shadow-sm">
             Pay Period: June 2026
           </span>
+          <button
+            onClick={handleGeneratePayslips}
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+          >
+            Generate Payslips
+          </button>
         </div>
       </div>
 
@@ -143,7 +192,7 @@ export default function EnterprisePayrollPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {filteredPayslips.map((slip) => {
-                    const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === slip.employee_id);
+                    const emp = employees.find((e) => e.id === slip.employee_id);
                     if (!emp) return null;
                     return (
                       <tr key={slip.id} className="hover:bg-blue-50/30 transition-colors">
@@ -191,7 +240,7 @@ export default function EnterprisePayrollPage() {
         {activeTab === "structures" && (
           <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
             {salaryStructures.map((ss) => {
-              const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === ss.employee_id);
+              const emp = employees.find((e) => e.id === ss.employee_id);
               if (!emp) return null;
               const totalEarnings = ss.basic_salary + ss.hra + ss.special_allowance + ss.conveyance_allowance;
               const totalDeds = ss.pf_deduction + ss.esi_deduction + ss.tds_tax_deduction;
@@ -273,8 +322,8 @@ export default function EnterprisePayrollPage() {
 
         {/* PAYSLIP PREVIEW TAB */}
         {activeTab === "preview" && selectedPayslip && (() => {
-          const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === selectedPayslip.employee_id);
-          const ss = ENTERPRISE_SALARIES[selectedPayslip.employee_id];
+          const emp = employees.find((e) => e.id === selectedPayslip.employee_id);
+          const ss = salaryStructures.find((s) => s.employee_id === selectedPayslip.employee_id);
           if (!emp || !ss) return null;
           return (
             <div className="p-6">

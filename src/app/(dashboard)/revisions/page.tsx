@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
+import { getRevisionHistory, createRevision } from "@/lib/api/documents";
+import { getProjects } from "@/lib/api/projects";
 import { RevisionRecord } from "@/types/documents";
 import { Project } from "@/types/projects";
 import { Dialog } from "@/components/layout/Dialog";
@@ -41,13 +42,28 @@ export default function RevisionsPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
-    setRevisions(mockService.getRevisions());
-    const projs = mockService.getProjects();
-    setProjects(projs);
+  const loadData = async () => {
+    try {
+      const [revs, projs] = await Promise.all([
+        getRevisionHistory(),
+        getProjects(),
+      ]);
+      setRevisions(revs);
+      
+      const mappedProjs = projs.map((p: any) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        client: p.client,
+        status: p.status,
+      }));
+      setProjects(mappedProjs);
 
-    if (projs.length > 0) {
-      setForm((prev) => ({ ...prev, project_id: projs[0].id }));
+      if (mappedProjs.length > 0) {
+        setForm((prev) => ({ ...prev, project_id: mappedProjs[0].id }));
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -64,15 +80,19 @@ export default function RevisionsPage() {
     setIsAddOpen(true);
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.project_id || !form.drawing_number || !form.description || !form.date) {
       setFormError("All fields are required.");
       return;
     }
-    mockService.createRevision(form);
-    setIsAddOpen(false);
-    loadData();
+    try {
+      await createRevision(form);
+      setIsAddOpen(false);
+      loadData();
+    } catch (err: any) {
+      setFormError(err.message || "Failed to log revision");
+    }
   };
 
   const getProjectName = (id: string) => {
@@ -86,7 +106,7 @@ export default function RevisionsPage() {
   };
 
   // Filter revisions
-  const filteredRevisions = revisions.filter((rev) => {
+  const filteredRevisions = Array.isArray(revisions) ? revisions.filter((rev) => {
     const matchesSearch =
       rev.drawing_number.toLowerCase().includes(search.toLowerCase()) ||
       rev.description.toLowerCase().includes(search.toLowerCase());
@@ -94,7 +114,7 @@ export default function RevisionsPage() {
     const matchesProj = selectedProj === "all" || rev.project_id === selectedProj;
 
     return matchesSearch && matchesProj;
-  });
+  }) : [];
 
   return (
     <div className="space-y-6">

@@ -19,25 +19,56 @@ import {
   X,
 } from "lucide-react";
 import {
-  ENTERPRISE_EMPLOYEES,
-  ENTERPRISE_ATTENDANCE,
-  ENTERPRISE_LEAVES,
-  ENTERPRISE_LEAVE_BALANCES,
   EnterpriseAttendance,
   EnterpriseLeaveRequest,
 } from "@/data/mockEnterpriseData";
+import { getAttendance, getLeaves, approveLeave, rejectLeave } from "@/lib/api/attendance";
+import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
 export default function EnterpriseAttendancePage() {
-  const [attendanceLogs] = useState<EnterpriseAttendance[]>(ENTERPRISE_ATTENDANCE);
-  const [leaveRequests, setLeaveRequests] = useState<EnterpriseLeaveRequest[]>(ENTERPRISE_LEAVES);
+  const [attendanceLogs, setAttendanceLogs] = useState<EnterpriseAttendance[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<EnterpriseLeaveRequest[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const [attData, leaveData, empData] = await Promise.all([
+          getAttendance(),
+          getLeaves(),
+          getEmployees(),
+        ]);
+        setAttendanceLogs(attData);
+        setLeaveRequests(leaveData);
+        const mappedEmps = empData.map((emp: any) => ({
+          id: emp.id,
+          code: emp.employee_code || emp.id.substring(0, 8),
+          first_name: emp.first_name || "",
+          last_name: emp.last_name || "",
+          email: emp.email,
+          phone: emp.phone_number || "",
+          avatar: emp.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+          designation: emp.role || "Engineer",
+          department: emp.department || "Engineering",
+        }));
+        setEmployees(mappedEmps);
+      } catch (err) {
+        console.error("Failed to load attendance data", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
   const [activeTab, setActiveTab] = useState<"register" | "heatmap" | "leave_desk">("register");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [rejectReason, setRejectReason] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  const totalStaff = ENTERPRISE_EMPLOYEES.length;
+  const totalStaff = employees.length;
   const presentCount = attendanceLogs.filter((a) => a.status === "Present").length;
   const wfhCount = attendanceLogs.filter((a) => a.status === "Work From Home").length;
   const lateCount = attendanceLogs.filter((a) => a.is_late).length;
@@ -45,22 +76,32 @@ export default function EnterpriseAttendancePage() {
   const attendanceRate = Math.round(((presentCount + wfhCount) / totalStaff) * 100);
 
   const filteredLogs = attendanceLogs.filter((a) => {
-    const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === a.employee_id);
+    const emp = employees.find((e) => e.id === a.employee_id);
     const name = emp ? `${emp.first_name} ${emp.last_name}`.toLowerCase() : "";
     const matchesSearch = name.includes(search.toLowerCase()) || a.employee_id.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || a.status.toLowerCase().replace(/\s/g, "_") === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleApproveLeave = (id: string) => {
-    setLeaveRequests(leaveRequests.map((l) => (l.id === id ? { ...l, status: "Approved" as const } : l)));
+  const handleApproveLeave = async (id: string) => {
+    try {
+      const updated = await approveLeave(id);
+      setLeaveRequests(leaveRequests.map((l) => (l.id === id ? updated : l)));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleRejectLeave = (id: string) => {
+  const handleRejectLeave = async (id: string) => {
     if (!rejectReason.trim()) return;
-    setLeaveRequests(leaveRequests.map((l) => (l.id === id ? { ...l, status: "Rejected" as const, rejection_reason: rejectReason } : l)));
-    setRejectingId(null);
-    setRejectReason("");
+    try {
+      const updated = await rejectLeave(id, rejectReason);
+      setLeaveRequests(leaveRequests.map((l) => (l.id === id ? updated : l)));
+      setRejectingId(null);
+      setRejectReason("");
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const statusBadge = (status: string) => {
@@ -248,7 +289,7 @@ export default function EnterpriseAttendancePage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {filteredLogs.map((log) => {
-                    const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === log.employee_id);
+                    const emp = employees.find((e) => e.id === log.employee_id);
                     if (!emp) return null;
                     const sb = statusBadge(log.status);
                     return (
@@ -342,8 +383,13 @@ export default function EnterpriseAttendancePage() {
 
             {/* Leave Balances */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
-              {ENTERPRISE_EMPLOYEES.map((emp) => {
-                const bal = ENTERPRISE_LEAVE_BALANCES[emp.id];
+              {employees.map((emp) => {
+                const bal = {
+                  casual_total: 12, casual_used: 2,
+                  sick_total: 10, sick_used: 1,
+                  earned_total: 15, earned_used: 4,
+                  unpaid_used: 0
+                };
                 if (!bal) return null;
                 const leaveTypes = [
                   { label: "Casual", used: bal.casual_used, total: bal.casual_total },
@@ -384,7 +430,7 @@ export default function EnterpriseAttendancePage() {
             </div>
             <div className="space-y-3">
               {leaveRequests.map((leave) => {
-                const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === leave.employee_id);
+                const emp = employees.find((e) => e.id === leave.employee_id);
                 if (!emp) return null;
                 const isPending = leave.status === "Pending";
                 const leaveBg =

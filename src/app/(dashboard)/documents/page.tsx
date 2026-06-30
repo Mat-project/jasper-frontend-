@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { mockService } from "@/lib/api/mockService";
+import { getDocuments, createDocument, getVersions, approveDocument, rejectDocument, downloadDocument } from "@/lib/api/documents";
+import { getProjects } from "@/lib/api/projects";
 import { Dialog } from "@/components/layout/Dialog";
 import { Document, VersionHistory } from "@/types/documents";
 import { Project } from "@/types/projects";
@@ -23,6 +24,7 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [history, setHistory] = useState<VersionHistory[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Page navigation tabs
   const [activeTab, setActiveTab] = useState<"list" | "approvals">("list");
@@ -36,6 +38,7 @@ export default function DocumentsPage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isVersionOpen, setIsVersionOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Form states
   const [form, setForm] = useState({
@@ -51,14 +54,30 @@ export default function DocumentsPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
-    setDocuments(mockService.getDocuments());
-    const projs = mockService.getProjects();
-    setProjects(projs);
-    setHistory(mockService.getVersionHistories());
+  const loadData = async () => {
+    try {
+      const [docs, projs] = await Promise.all([
+        getDocuments(),
+        getProjects(),
+      ]);
+      setDocuments(docs);
+      
+      const mappedProjs = projs.map((p: any) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        client: p.client,
+        status: p.status,
+      }));
+      setProjects(mappedProjs);
 
-    if (projs.length > 0) {
-      setForm((prev) => ({ ...prev, project_id: projs[0].id }));
+      if (mappedProjs.length > 0) {
+        setForm((prev) => ({ ...prev, project_id: mappedProjs[0].id }));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -70,38 +89,76 @@ export default function DocumentsPage() {
       file_name: "",
       remarks: "",
     });
+    setSelectedFile(null);
     setFormError(null);
     setIsUploadOpen(true);
   };
 
-  const handleOpenVersions = (doc: Document) => {
+  const handleOpenVersions = async (doc: Document) => {
     setSelectedDoc(doc);
+    try {
+      const vers = await getVersions(doc.id);
+      setHistory(vers);
+    } catch (err) {
+      console.error(err);
+    }
     setIsVersionOpen(true);
   };
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.project_id || !form.version || !form.file_name || !form.remarks) {
       setFormError("All fields are required.");
       return;
     }
-    mockService.uploadDocument({
-      ...form,
-      uploaded_by: "John Doe",
-    });
-    setIsUploadOpen(false);
-    loadData();
+    try {
+      const formData = new FormData();
+      formData.append("project", form.project_id);
+      formData.append("document_number", `DOC-${form.file_name.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${Date.now().toString().slice(-4)}`);
+      formData.append("title", form.file_name);
+      formData.append("description", form.remarks);
+      formData.append("department", "Engineering");
+      
+      let mappedType = "Drawing";
+      if (form.document_type.toLowerCase().includes("calc")) mappedType = "Calculation";
+      else if (form.document_type.toLowerCase().includes("report")) mappedType = "Report";
+      else if (form.document_type.toLowerCase().includes("spec")) mappedType = "Specification";
+      else if (form.document_type.toLowerCase().includes("boq")) mappedType = "BOQ";
+      formData.append("document_type", mappedType);
+      
+      if (selectedFile) {
+        formData.append("file", selectedFile, form.file_name);
+      } else {
+        const blob = new Blob(["Drawing sheet content"], { type: "application/pdf" });
+        formData.append("file", blob, form.file_name);
+      }
+      formData.append("status", "Under Review");
+
+      await createDocument(formData);
+      setIsUploadOpen(false);
+      loadData();
+    } catch (err: any) {
+      setFormError(err.message || "Failed to upload document");
+    }
   };
 
-  const handleApproveDoc = (id: string) => {
-    mockService.updateDocumentStatus(id, "Approved", undefined, "System Admin");
-    loadData();
+  const handleApproveDoc = async (id: string) => {
+    try {
+      await approveDocument(id);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleRejectDoc = (id: string) => {
+  const handleRejectDoc = async (id: string) => {
     const reason = prompt("Enter rejection remarks:") || "";
-    mockService.updateDocumentStatus(id, "Rejected", reason, "System Admin");
-    loadData();
+    try {
+      await rejectDocument(id, reason);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const getProjectCode = (id: string) => {
@@ -115,14 +172,14 @@ export default function DocumentsPage() {
   };
 
   // Filter documents
-  const filteredDocs = documents.filter((d) => {
+  const filteredDocs = Array.isArray(documents) ? documents.filter((d) => {
     const matchesSearch = d.file_name.toLowerCase().includes(search.toLowerCase()) || d.document_type.toLowerCase().includes(search.toLowerCase());
     const matchesProj = selectedProj === "all" || d.project_id === selectedProj;
     
     // Only approved documents show up in the main list tab
     const matchesTab = activeTab === "approvals" ? d.status === approvalTab : d.status === "Approved";
     return matchesSearch && matchesProj && matchesTab;
-  });
+  }) : [];
 
   const getDocHistory = (docId: string) => {
     return history.filter((h) => h.document_id === docId);
@@ -269,6 +326,13 @@ export default function DocumentsPage() {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
+                        onClick={() => downloadDocument(doc.id)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-foreground transition-colors"
+                        title="Download Document"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => handleOpenVersions(doc)}
                         className="p-1.5 rounded-lg text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-foreground transition-colors"
                         title="Version History"
@@ -357,15 +421,22 @@ export default function DocumentsPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">File Name *</label>
+            <label className="text-xs font-semibold text-muted-foreground">Upload Document File *</label>
             <input
-              type="text"
-              value={form.file_name}
-              onChange={(e) => setForm({ ...form, file_name: e.target.value })}
-              placeholder="drawing_name_or_code.pdf"
+              type="file"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setSelectedFile(file);
+                if (file) {
+                  setForm({ ...form, file_name: file.name });
+                }
+              }}
               className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               required
             />
+            {form.file_name && (
+              <p className="text-xs text-muted-foreground mt-1 font-mono text-brand-400">Selected: {form.file_name}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">

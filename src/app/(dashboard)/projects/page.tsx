@@ -19,17 +19,49 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
-  ENTERPRISE_EMPLOYEES,
-  ENTERPRISE_PROJECTS,
-  ENTERPRISE_ASSIGNMENTS,
   EnterpriseProject,
   EnterpriseAssignment,
 } from "@/data/mockEnterpriseData";
+import { getProjects, createProject, deleteProject, getAssignments, createAssignment } from "@/lib/api/projects";
+import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
 export default function EnterpriseProjectsPage() {
-  const [projects, setProjects] = useState<EnterpriseProject[]>(ENTERPRISE_PROJECTS);
-  const [assignments, setAssignments] = useState<EnterpriseAssignment[]>(ENTERPRISE_ASSIGNMENTS);
+  const [projects, setProjects] = useState<EnterpriseProject[]>([]);
+  const [assignments, setAssignments] = useState<EnterpriseAssignment[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const [projData, assignData, empData] = await Promise.all([
+          getProjects(),
+          getAssignments(),
+          getEmployees(),
+        ]);
+        setProjects(projData);
+        setAssignments(assignData);
+        const mappedEmps = empData.map((emp: any) => ({
+          id: emp.id,
+          code: emp.employee_code || emp.id.substring(0, 8),
+          first_name: emp.first_name || "",
+          last_name: emp.last_name || "",
+          email: emp.email,
+          phone: emp.phone_number || "",
+          avatar: emp.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+          designation: emp.role || "Engineer",
+          department: emp.department || "Engineering",
+        }));
+        setEmployees(mappedEmps);
+      } catch (err) {
+        console.error("Failed to load projects data", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
   const [activeTab, setActiveTab] = useState<"portfolio" | "resource_matrix" | "milestones">("portfolio");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -64,46 +96,59 @@ export default function EnterpriseProjectsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleDeleteProject = (id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id));
-    setAssignments((prev) => prev.filter((a) => a.project_id !== id));
-    setDeleteConfirmId(null);
+  const handleDeleteProject = async (id: string) => {
+    try {
+      await deleteProject(id);
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      setAssignments((prev) => prev.filter((a) => a.project_id !== id));
+      setDeleteConfirmId(null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const employeeWorkloads = ENTERPRISE_EMPLOYEES.map((emp) => {
+  const employeeWorkloads = employees.map((emp) => {
     const empAssigns = assignments.filter((a) => a.employee_id === emp.id);
     const totalAlloc = empAssigns.reduce((sum, a) => sum + a.allocation_percentage, 0);
     return { employee: emp, assignments: empAssigns, totalAlloc };
   });
 
-  const handleAddProject = (e: React.FormEvent) => {
+  const handleAddProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addForm.code || !addForm.name || !addForm.client) return;
-    const newProj: EnterpriseProject = {
-      id: `prj-${Date.now()}`, code: addForm.code, name: addForm.name,
-      client: addForm.client, budget: 0, spent: 0,
-      start_date: addForm.start_date, end_date: addForm.end_date,
-      status: "Active", priority: "Medium", progress: 0,
-      milestones: [{ id: `m-${Date.now()}`, name: "Kickoff & Design Basis", due_date: addForm.start_date, is_completed: true }],
-      tasks: { total: 10, completed: 0, in_progress: 2, pending: 8 },
-    };
-    setProjects([newProj, ...projects]);
-    setIsAddOpen(false);
-    setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", end_date: "2026-12-31" });
+    try {
+      const newProj = await createProject({
+        code: addForm.code,
+        name: addForm.name,
+        client: addForm.client,
+        start_date: addForm.start_date,
+        end_date: addForm.end_date,
+        status: "Active",
+      });
+      setProjects([newProj, ...projects]);
+      setIsAddOpen(false);
+      setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", end_date: "2026-12-31" });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleAssignSubmit = (e: React.FormEvent) => {
+  const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProj || !assignForm.employee_id) return;
-    const newAssign: EnterpriseAssignment = {
-      id: `asg-${Date.now()}`, project_id: selectedProj.id,
-      employee_id: assignForm.employee_id, role: assignForm.role,
-      allocation_percentage: Number(assignForm.allocation_percentage),
-      assigned_date: new Date().toISOString().split("T")[0],
-    };
-    setAssignments([...assignments, newAssign]);
-    setIsAssignOpen(false);
-    setAssignForm({ employee_id: "", role: "Structural Detailer", allocation_percentage: 50 });
+    try {
+      const newAssign = await createAssignment({
+        project_id: selectedProj.id,
+        employee_id: assignForm.employee_id,
+        role: assignForm.role,
+        allocation_percentage: Number(assignForm.allocation_percentage),
+      });
+      setAssignments([...assignments, newAssign]);
+      setIsAssignOpen(false);
+      setAssignForm({ employee_id: "", role: "Structural Detailer", allocation_percentage: 50 });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleToggleMilestone = (projId: string, milestoneId: string) => {
@@ -272,7 +317,7 @@ export default function EnterpriseProjectsPage() {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center -space-x-2">
                             {projAssigns.map((asg) => {
-                              const emp = ENTERPRISE_EMPLOYEES.find((e) => e.id === asg.employee_id);
+                              const emp = employees.find((e) => e.id === asg.employee_id);
                               if (!emp) return null;
                               return (
                                 <img
@@ -507,7 +552,7 @@ export default function EnterpriseProjectsPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
                 >
                   <option value="">-- Select Staff --</option>
-                  {ENTERPRISE_EMPLOYEES.map((emp) => (
+                  {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name} ({emp.designation})</option>
                   ))}
                 </select>
