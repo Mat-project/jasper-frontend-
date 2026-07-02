@@ -37,26 +37,26 @@ const WorkerRow = React.memo(({
   onUpdateField: (id: string, field: keyof WorkerRecord, value: any) => void;
 }) => {
   return (
-    <tr className="hover:bg-slate-50/50 transition-colors">
-      <td className="px-6 py-3 font-mono font-bold text-gray-900 text-xs">
+    <tr className="hover:bg-slate-850/80 transition-colors even:bg-slate-900/50 odd:bg-slate-850/30 border-b border-slate-800">
+      <td className="px-6 py-3 font-mono font-bold text-slate-300 text-xs border-r border-slate-800">
         {worker.code || "—"}
       </td>
-      <td className="px-6 py-3 font-bold text-gray-800">
+      <td className="px-6 py-3 font-bold text-white border-r border-slate-800">
         {worker.name || "—"}
       </td>
-      <td className="px-6 py-3">
-        <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-full text-xs font-medium text-slate-600">
+      <td className="px-6 py-3 border-r border-slate-800">
+        <span className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs font-medium text-slate-300">
           {worker.department || "—"}
         </span>
       </td>
-      <td className="px-6 py-3">
+      <td className="px-6 py-3 border-r border-slate-800">
         <div className="flex justify-center">
-          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+          <div className="inline-flex rounded-lg border border-slate-700 p-0.5 bg-slate-950">
             {(["Present", "Absent", "Half-Day", "On Duty"] as const).map((st) => {
               const isActive = worker.status === st;
               const activeStyles = {
                 "Present": "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700",
-                "Absent": "bg-red-600 text-white shadow-sm hover:bg-red-700",
+                "Absent": "bg-rose-600 text-white shadow-sm hover:bg-rose-700",
                 "Half-Day": "bg-purple-600 text-white shadow-sm hover:bg-purple-700",
                 "On Duty": "bg-blue-600 text-white shadow-sm hover:bg-blue-700",
               }[st];
@@ -69,7 +69,7 @@ const WorkerRow = React.memo(({
                     "px-3 py-1.5 text-xs font-bold rounded-md transition-all",
                     isActive
                       ? activeStyles
-                      : "text-slate-500 hover:text-slate-800"
+                      : "text-slate-400 hover:text-slate-200"
                   )}
                 >
                   {st}
@@ -79,7 +79,7 @@ const WorkerRow = React.memo(({
           </div>
         </div>
       </td>
-      <td className="px-6 py-3 w-28">
+      <td className="px-6 py-3 w-32 border-r border-slate-800">
         <input
           type="number"
           min="0"
@@ -88,7 +88,7 @@ const WorkerRow = React.memo(({
           defaultValue={worker.overtime || ""}
           onBlur={(e) => onUpdateField(worker.id, "overtime", parseFloat(e.target.value) || 0)}
           placeholder="0.0"
-          className="w-20 px-2 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-center font-bold text-gray-900 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+          className="w-24 px-2 py-1.5 border border-slate-750 bg-slate-850 text-white rounded-lg text-center font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
         />
       </td>
       <td className="px-6 py-3 min-w-[200px]">
@@ -97,7 +97,7 @@ const WorkerRow = React.memo(({
           defaultValue={worker.remarks}
           onBlur={(e) => onUpdateField(worker.id, "remarks", e.target.value)}
           placeholder="Enter audit exception note, site location, or shift variance..."
-          className="w-full px-3 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-xs placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+          className="w-full px-3 py-1.5 border border-slate-750 bg-slate-850 text-slate-200 rounded-lg text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
         />
       </td>
     </tr>
@@ -569,27 +569,27 @@ export default function BulkAttendancePortal() {
         </div>
 
         {/* High Density Table Block */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-fade-in">
+        <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-lg overflow-hidden animate-fade-in">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 space-y-3">
-              <RefreshCw className="h-8 w-8 text-blue-600 animate-spin" />
-              <p className="text-sm font-semibold text-slate-500">Synchronizing database employee records...</p>
+            <div className="flex flex-col items-center justify-center py-20 space-y-3 text-slate-100">
+              <RefreshCw className="h-8 w-8 text-blue-500 animate-spin" />
+              <p className="text-sm font-semibold text-slate-400">Synchronizing database employee records...</p>
             </div>
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse border border-slate-800">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      <th className="px-6 py-4">Emp Code</th>
-                      <th className="px-6 py-4">Full Name</th>
-                      <th className="px-6 py-4">Department/Section</th>
-                      <th className="px-6 py-4 text-center">Roster Daily Status</th>
-                      <th className="px-6 py-4">Overtime Checked (Hours)</th>
+                    <tr className="bg-slate-950 border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-4 border-r border-slate-800">Emp Code</th>
+                      <th className="px-6 py-4 border-r border-slate-800">Full Name</th>
+                      <th className="px-6 py-4 border-r border-slate-800">Department/Section</th>
+                      <th className="px-6 py-4 border-r border-slate-800 text-center">Roster Daily Status</th>
+                      <th className="px-6 py-4 border-r border-slate-800">Overtime Hours</th>
                       <th className="px-6 py-4">Admin Audit Flags / Remarks</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 text-sm">
+                  <tbody className="divide-y divide-slate-800 text-sm">
                     {paginatedWorkers.length > 0 ? (
                       paginatedWorkers.map((w) => (
                         <WorkerRow
@@ -601,7 +601,7 @@ export default function BulkAttendancePortal() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
+                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-medium animate-pulse">
                           No synchronized workers found matching the filters.
                         </td>
                       </tr>
@@ -612,32 +612,32 @@ export default function BulkAttendancePortal() {
 
               {/* Pagination Controls */}
               {showPagination && totalPages > 1 && (
-                <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-                  <div className="text-xs font-semibold text-slate-500">
-                    Showing <b className="text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</b> to{" "}
-                    <b className="text-gray-900">
+                <div className="bg-slate-950 border-t border-slate-800 px-6 py-4 flex items-center justify-between">
+                  <div className="text-xs font-semibold text-slate-400">
+                    Showing <b className="text-slate-100">{(currentPage - 1) * itemsPerPage + 1}</b> to{" "}
+                    <b className="text-slate-100">
                       {Math.min(currentPage * itemsPerPage, filteredWorkers.length)}
                     </b>{" "}
-                    of <b className="text-gray-900">{filteredWorkers.length}</b> filtered workers
+                    of <b className="text-slate-100">{filteredWorkers.length}</b> filtered workers
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       disabled={currentPage === 1}
                       onClick={() => setCurrentPage((p) => p - 1)}
-                      className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
+                      className="p-1.5 bg-slate-850 border border-slate-750 rounded-lg text-slate-400 hover:text-slate-100 disabled:opacity-40 disabled:hover:text-slate-400 transition-colors shadow-sm"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
                     
-                    <span className="text-xs font-semibold text-slate-600">
-                      Page <b className="text-gray-900">{currentPage}</b> of {totalPages}
+                    <span className="text-xs font-semibold text-slate-400">
+                      Page <b className="text-slate-100">{currentPage}</b> of {totalPages}
                     </span>
 
                     <button
                       disabled={currentPage === totalPages}
                       onClick={() => setCurrentPage((p) => p + 1)}
-                      className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
+                      className="p-1.5 bg-slate-850 border border-slate-750 rounded-lg text-slate-400 hover:text-slate-100 disabled:opacity-40 disabled:hover:text-slate-400 transition-colors shadow-sm"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </button>
