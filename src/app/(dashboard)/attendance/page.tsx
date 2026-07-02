@@ -1,509 +1,416 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  Clock,
-  Users,
-  CalendarDays,
-  ChevronRight,
   Search,
   Filter,
-  AlertCircle,
-  ArrowUpRight,
-  ArrowDownRight,
-  Laptop,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  CalendarDays,
+  FileCheck,
   UserCheck,
 } from "lucide-react";
-import {
-  EnterpriseAttendance,
-} from "@/data/mockEnterpriseData";
-import { getAttendance } from "@/lib/api/attendance";
-import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
-export default function EnterpriseAttendancePage() {
-  const [attendanceLogs, setAttendanceLogs] = useState<EnterpriseAttendance[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+interface WorkerRecord {
+  id: string;
+  code: string;
+  name: string;
+  department: string;
+  status: "Present" | "Absent" | "Half-Day" | "On Duty";
+  overtime: number;
+  remarks: string;
+}
 
-  // Time & Date state
-  const [time, setTime] = useState<string>("");
-  const [dateStr, setDateStr] = useState<string>("");
-  const [workMode, setWorkMode] = useState<string>("Office");
-  const [notes, setNotes] = useState<string>("");
-  const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
-  const [checkInTime, setCheckInTime] = useState<string | null>(null);
-  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
+const DEPARTMENTS = [
+  "Production A",
+  "Production B",
+  "Fabrication",
+  "Machining",
+  "Quality Control",
+];
+
+const generateMockWorkers = (): WorkerRecord[] => {
+  return Array.from({ length: 500 }, (_, i) => {
+    const workerNum = i + 1;
+    const dept = DEPARTMENTS[i % DEPARTMENTS.length];
+    const code = `EMP${1000 + workerNum}`;
+    return {
+      id: `worker-${workerNum}`,
+      code,
+      name: `Worker ${String(workerNum).padStart(3, "0")}`,
+      department: dept,
+      status: "Present",
+      overtime: 0,
+      remarks: "",
+    };
+  });
+};
+
+export default function BulkAttendancePortal() {
+  const [workers, setWorkers] = useState<WorkerRecord[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [deptFilter, setDeptFilter] = useState<string>("All");
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: "", show: false });
 
-  // Clock effect
-  React.useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setTime(now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-      setDateStr(now.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
+  const itemsPerPage = 50;
+
+  useEffect(() => {
+    const today = new Date().toISOString().split("T")[0];
+    setSelectedDate(today);
+    setWorkers(generateMockWorkers());
   }, []);
 
-  const handleCheckInOut = () => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-    if (!isCheckedIn) {
-      setIsCheckedIn(true);
-      setCheckInTime(timeStr);
-      setCheckOutTime(null);
-      
-      const newRecord: EnterpriseAttendance = {
-        id: "current-user-session",
-        employee_id: "current-user",
-        date: now.toISOString().split("T")[0],
-        check_in: timeStr,
-        check_out: "",
-        break_duration_mins: 0,
-        working_hours: 0,
-        overtime_hours: 0,
-        is_late: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15),
-        is_early_exit: false,
-        remarks: notes,
-        status: workMode === "Remote" ? "Work From Home" : "Present",
-      };
-      setAttendanceLogs(prev => [newRecord, ...prev]);
-      
-      setToast({
-        message: `Successfully checked in at ${timeStr} (${workMode})!`,
-        show: true
-      });
-      setTimeout(() => setToast(prev => ({ ...prev, show: false })), 5000);
-    } else {
-      setIsCheckedIn(false);
-      setCheckOutTime(timeStr);
-      
-      setAttendanceLogs(prev => prev.map(rec => {
-        if (rec.id === "current-user-session") {
-          return { ...rec, check_out: timeStr, remarks: notes };
-        }
-        return rec;
-      }));
-      
-      setToast({
-        message: `Successfully checked out at ${timeStr}!`,
-        show: true
-      });
-      setTimeout(() => setToast(prev => ({ ...prev, show: false })), 5000);
-    }
+  const filteredWorkers = useMemo(() => {
+    return workers.filter((w) => {
+      const matchesSearch =
+        w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        w.code.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesDept = deptFilter === "All" || w.department === deptFilter;
+      return matchesSearch && matchesDept;
+    });
+  }, [workers, searchQuery, deptFilter]);
+
+  const totalPages = Math.ceil(filteredWorkers.length / itemsPerPage);
+
+  const paginatedWorkers = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredWorkers.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredWorkers, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, deptFilter]);
+
+  const handleStatusChange = (id: string, newStatus: WorkerRecord["status"]) => {
+    setWorkers((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, status: newStatus } : w))
+    );
   };
 
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        const [attData, empData] = await Promise.all([
-          getAttendance(),
-          getEmployees(),
-        ]);
-        setAttendanceLogs(attData);
-        const mappedEmps = empData.map((emp: any) => ({
-          id: emp.id,
-          code: emp.employee_code || emp.id.substring(0, 8),
-          first_name: emp.first_name || "",
-          last_name: emp.last_name || "",
-          email: emp.email,
-          phone: emp.phone_number || "",
-          avatar: emp.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-          designation: emp.role || "Engineer",
-          department: emp.department || "Engineering",
-        }));
-        
-        const currentUserMock = {
-          id: "current-user",
-          code: "CURR001",
-          first_name: "You",
-          last_name: "(System Admin)",
-          email: "admin@eoms.local",
-          phone: "+91 99999 99999",
-          avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80",
-          designation: "System Admin",
-          department: "Administration",
-        };
-        setEmployees([currentUserMock, ...mappedEmps]);
-      } catch (err) {
-        console.error("Failed to load attendance data", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-  }, []);
-  const [activeTab, setActiveTab] = useState<"register" | "heatmap">("register");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-
-  const totalStaff = employees.length;
-  const presentCount = attendanceLogs.filter((a) => a.status === "Present").length;
-  const wfhCount = attendanceLogs.filter((a) => a.status === "Work From Home").length;
-  const lateCount = attendanceLogs.filter((a) => a.is_late).length;
-  const attendanceRate = Math.round(((presentCount + wfhCount) / totalStaff) * 100);
-
-  const filteredLogs = attendanceLogs.filter((a) => {
-    const emp = employees.find((e) => e.id === a.employee_id);
-    const name = emp ? `${emp.first_name} ${emp.last_name}`.toLowerCase() : "";
-    const matchesSearch = name.includes(search.toLowerCase()) || a.employee_id.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || a.status.toLowerCase().replace(/\s/g, "_") === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-
-
-  const statusBadge = (status: string) => {
-    const map: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-      "Present": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500" },
-      "Work From Home": { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500" },
-      "On Leave": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500" },
-      "Absent": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", dot: "bg-red-500" },
-      "Half Day": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", dot: "bg-purple-500" },
-    };
-    const s = map[status] || { bg: "bg-gray-50", text: "text-gray-600", border: "border-gray-200", dot: "bg-gray-400" };
-    return s;
+  const handleOvertimeChange = (id: string, val: string) => {
+    const otVal = parseFloat(val) || 0;
+    setWorkers((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, overtime: otVal } : w))
+    );
   };
 
-  // Heatmap: Generate 30-day grid with simulated data
-  const heatmapDays = Array.from({ length: 30 }, (_, i) => {
-    const date = new Date(2026, 5, i + 1);
-    const dayOfWeek = date.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const rate = isWeekend ? 0 : 70 + Math.floor(Math.random() * 30);
-    return {
-      day: i + 1,
-      date: date.toLocaleDateString("en-IN", { weekday: "short" }),
-      rate,
-      isWeekend,
-      label: `Jun ${i + 1}`,
-    };
-  });
-
-  const getHeatColor = (rate: number, isWeekend: boolean) => {
-    if (isWeekend) return "bg-gray-50 border-gray-100 text-gray-300";
-    if (rate >= 95) return "bg-emerald-100 border-emerald-200 text-emerald-800";
-    if (rate >= 85) return "bg-emerald-50 border-emerald-100 text-emerald-700";
-    if (rate >= 75) return "bg-blue-50 border-blue-100 text-blue-700";
-    if (rate >= 60) return "bg-amber-50 border-amber-100 text-amber-700";
-    return "bg-red-50 border-red-100 text-red-700";
+  const handleRemarksChange = (id: string, val: string) => {
+    setWorkers((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, remarks: val } : w))
+    );
   };
+
+  const handleMarkAllPresent = () => {
+    const filteredIds = new Set(filteredWorkers.map((w) => w.id));
+    setWorkers((prev) =>
+      prev.map((w) => (filteredIds.has(w.id) ? { ...w, status: "Present" } : w))
+    );
+    
+    setToast({
+      message: `Marked all ${filteredWorkers.length} filtered workers as Present!`,
+      show: true,
+    });
+    setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+  };
+
+  const handleSaveSheet = () => {
+    console.log("=== SAVING ATTENDANCE SHEET ===");
+    console.log("Date:", selectedDate);
+    console.log("Total Records:", workers.length);
+    console.log("Payload:", workers);
+    console.log("================================");
+
+    setToast({
+      message: `Saved attendance sheet for ${workers.length} workers successfully!`,
+      show: true,
+    });
+    setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+  };
+
+  const stats = useMemo(() => {
+    let present = 0;
+    let absent = 0;
+    let halfDay = 0;
+    let onDuty = 0;
+    let totalOt = 0;
+
+    workers.forEach((w) => {
+      if (w.status === "Present") present++;
+      else if (w.status === "Absent") absent++;
+      else if (w.status === "Half-Day") halfDay++;
+      else if (w.status === "On Duty") onDuty++;
+      totalOt += w.overtime;
+    });
+
+    return { present, absent, halfDay, onDuty, totalOt };
+  }, [workers]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-6 space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium mb-1">
-            <span>Enterprise HRMS</span>
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-slate-600 font-semibold">Attendance Management</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-            <span className="p-1.5 bg-blue-50 rounded-lg"><Clock className="h-5 w-5 text-blue-600" /></span>
-            Attendance Management
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Monitor daily attendance and shift adherence.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-slate-600 shadow-sm flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 text-blue-500" /> June 26, 2026
-          </span>
-        </div>
-      </div>
-
-      {/* Mark Attendance Interactive Card */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today&apos;s Attendance Action</span>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">{time || "00:00:00 AM"}</h2>
-            <p className="text-xs text-slate-400 font-medium">{dateStr || "Loading current date..."}</p>
+    <div className="min-h-screen bg-[#F8FAFC] pb-32">
+      <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+        {/* Header Block */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-200 pb-5">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
+              <span className="p-1.5 bg-blue-50 rounded-lg">
+                <Clock className="h-5 w-5 text-blue-600" />
+              </span>
+              Bulk Attendance Portal
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Admin high-density logging console for rapid roster tracking (500 Workers).
+            </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4 flex-1 max-w-2xl">
-            <div className="w-full sm:w-44 space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Work Mode</label>
-              <select
-                disabled={isCheckedIn}
-                value={workMode}
-                onChange={(e) => setWorkMode(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 font-semibold focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 disabled:opacity-60 transition-all"
-              >
-                <option value="Office">Office</option>
-                <option value="Field/Site">Field/Site</option>
-                <option value="Remote">Remote</option>
-              </select>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+              <CalendarDays className="h-4 w-4 text-blue-500" />
+              <label htmlFor="log-date" className="sr-only">Select Date</label>
+              <input
+                id="log-date"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="text-sm font-semibold text-slate-700 bg-transparent border-none outline-none focus:ring-0"
+              />
             </div>
+          </div>
+        </div>
 
-            <div className="w-full flex-1 space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Notes / Remarks</label>
+        {/* Toolbar Controls */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+            {/* Search */}
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                disabled={isCheckedIn}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={isCheckedIn ? "Checked in successfully" : "e.g., morning shift, client site..."}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 disabled:opacity-60 transition-all"
+                placeholder="Search by name or code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
               />
             </div>
 
-            <div className="w-full sm:w-auto pt-5 sm:pt-0">
-              <button
-                onClick={handleCheckInOut}
-                className={cn(
-                  "w-full sm:w-36 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all duration-150 transform hover:scale-[1.01] active:scale-[0.99]",
-                  isCheckedIn
-                    ? "bg-red-600 hover:bg-red-700 text-white shadow-red-200"
-                    : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200"
-                )}
+            {/* Department Filter */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Filter className="h-4 w-4 text-slate-400" />
+              <select
+                value={deptFilter}
+                onChange={(e) => setDeptFilter(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 font-medium focus:outline-none focus:border-blue-400 w-full sm:w-44"
               >
-                {isCheckedIn ? "Check Out" : "Check In"}
-              </button>
+                <option value="All">All Departments</option>
+                {DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
             </div>
+          </div>
+
+          <div className="w-full md:w-auto flex justify-end">
+            <button
+              onClick={handleMarkAllPresent}
+              className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+            >
+              <UserCheck className="h-4 w-4" /> Mark All Present ({filteredWorkers.length})
+            </button>
           </div>
         </div>
 
-        {checkInTime && (
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-4 text-xs font-semibold text-slate-500">
-            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Checked In: <b className="text-gray-900">{checkInTime}</b></span>
-            {checkOutTime && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Checked Out: <b className="text-gray-900">{checkOutTime}</b></span>}
+        {/* High Density Table Block */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4">Worker Code</th>
+                  <th className="px-6 py-4">Worker Name</th>
+                  <th className="px-6 py-4">Department</th>
+                  <th className="px-6 py-4 text-center">Roster Status</th>
+                  <th className="px-6 py-4">OT Hours</th>
+                  <th className="px-6 py-4">Remarks / Flags</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm">
+                {paginatedWorkers.length > 0 ? (
+                  paginatedWorkers.map((w) => (
+                    <tr key={w.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-3 font-mono font-bold text-gray-900 text-xs">
+                        {w.code}
+                      </td>
+                      <td className="px-6 py-3 font-bold text-gray-800">
+                        {w.name}
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-full text-xs font-medium text-slate-600">
+                          {w.department}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="flex justify-center">
+                          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                            {(["Present", "Absent", "Half-Day", "On Duty"] as const).map((st) => {
+                              const isActive = w.status === st;
+                              const activeStyles = {
+                                "Present": "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700",
+                                "Absent": "bg-red-600 text-white shadow-sm hover:bg-red-700",
+                                "Half-Day": "bg-purple-600 text-white shadow-sm hover:bg-purple-700",
+                                "On Duty": "bg-blue-600 text-white shadow-sm hover:bg-blue-700",
+                              }[st];
+
+                              return (
+                                <button
+                                  key={st}
+                                  onClick={() => handleStatusChange(w.id, st)}
+                                  className={cn(
+                                    "px-3 py-1.5 text-xs font-bold rounded-md transition-all",
+                                    isActive
+                                      ? activeStyles
+                                      : "text-slate-500 hover:text-slate-800"
+                                  )}
+                                >
+                                  {st}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 w-28">
+                        <input
+                          type="number"
+                          min="0"
+                          max="24"
+                          step="0.5"
+                          value={w.overtime || ""}
+                          onChange={(e) => handleOvertimeChange(w.id, e.target.value)}
+                          placeholder="0.0"
+                          className="w-20 px-2 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-center font-bold text-gray-900 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                        />
+                      </td>
+                      <td className="px-6 py-3 min-w-[200px]">
+                        <input
+                          type="text"
+                          value={w.remarks}
+                          onChange={(e) => handleRemarksChange(w.id, e.target.value)}
+                          placeholder="Add comment..."
+                          className="w-full px-3 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-xs placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                        />
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
+                      No workers found matching the filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+              <div className="text-xs font-semibold text-slate-500">
+                Showing <b className="text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</b> to{" "}
+                <b className="text-gray-900">
+                  {Math.min(currentPage * itemsPerPage, filteredWorkers.length)}
+                </b>{" "}
+                of <b className="text-gray-900">{filteredWorkers.length}</b> filtered workers
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                
+                <span className="text-xs font-semibold text-slate-600">
+                  Page <b className="text-gray-900">{currentPage}</b> of {totalPages}
+                </span>
+
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Floating Sticky Bottom Summary Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-200 py-4 px-6 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.08)] z-40">
+        <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-6 flex-wrap text-sm">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-slate-500 font-medium">Present:</span>
+              <strong className="text-gray-900 font-bold">{stats.present}</strong>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-red-500" />
+              <span className="text-slate-500 font-medium">Absent:</span>
+              <strong className="text-gray-900 font-bold">{stats.absent}</strong>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-purple-500" />
+              <span className="text-slate-500 font-medium">Half-Day:</span>
+              <strong className="text-gray-900 font-bold">{stats.halfDay}</strong>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-blue-500" />
+              <span className="text-slate-500 font-medium">On Duty:</span>
+              <strong className="text-gray-900 font-bold">{stats.onDuty}</strong>
+            </div>
+            <div className="flex items-center gap-1.5 border-l border-gray-200 pl-6">
+              <span className="text-slate-500 font-medium">Total OT Hours:</span>
+              <strong className="text-gray-900 font-bold font-mono">{stats.totalOt.toFixed(1)} hrs</strong>
+            </div>
+          </div>
+
+          <div className="w-full md:w-auto">
+            <button
+              onClick={handleSaveSheet}
+              className="w-full md:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-100 flex items-center justify-center gap-1.5 transition-all transform hover:scale-[1.01] active:scale-[0.99]"
+            >
+              <FileCheck className="h-4 w-4" /> Save Today&apos;s Attendance Sheet
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Toast Notification */}
       {toast.show && (
-        <div className="fixed bottom-5 right-5 bg-slate-900 border border-slate-800 text-white rounded-xl p-4 shadow-2xl flex items-center gap-3 animate-slide-in-up z-50">
+        <div className="fixed bottom-24 right-5 bg-slate-900 border border-slate-800 text-white rounded-xl p-4 shadow-2xl flex items-center gap-3 animate-slide-in-up z-50">
           <UserCheck className="h-5 w-5 text-emerald-400" />
           <div>
             <p className="text-xs font-semibold text-slate-400">Success</p>
             <p className="text-sm font-bold">{toast.message}</p>
           </div>
-          <button onClick={() => setToast({ ...toast, show: false })} className="text-slate-400 hover:text-white ml-2 text-xs font-bold">✕</button>
+          <button
+            onClick={() => setToast((t) => ({ ...t, show: false }))}
+            className="text-slate-400 hover:text-white ml-2 text-xs font-bold"
+          >
+            ✕
+          </button>
         </div>
       )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[
-          {
-            label: "Today\u2019s Presence",
-            value: `${attendanceRate}%`,
-            sub: `${presentCount + wfhCount}/${totalStaff} On Duty`,
-            icon: <UserCheck className="h-5 w-5 text-emerald-600" />,
-            iconBg: "bg-emerald-50",
-            trend: { value: "+3.2%", positive: true },
-          },
-          {
-            label: "Work From Home",
-            value: wfhCount,
-            sub: "Remote today",
-            icon: <Laptop className="h-5 w-5 text-blue-600" />,
-            iconBg: "bg-blue-50",
-            trend: null,
-          },
-          {
-            label: "Late Arrivals",
-            value: lateCount,
-            sub: "After 9:15 AM cutoff",
-            icon: <AlertCircle className="h-5 w-5 text-amber-500" />,
-            iconBg: "bg-amber-50",
-            trend: { value: "-1", positive: true },
-          },
-        ].map((card, i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{card.label}</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-                {card.trend && (
-                  <span className={cn("text-xs font-semibold flex items-center gap-0.5", card.trend.positive ? "text-emerald-600" : "text-red-600")}>
-                    {card.trend.positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                    {card.trend.value}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">{card.sub}</p>
-            </div>
-            <div className={`p-3 ${card.iconBg} rounded-xl`}>{card.icon}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex gap-1 p-1.5 border-b border-gray-100">
-          {[
-            { key: "register", label: "Shift Register" },
-            { key: "heatmap", label: "Monthly Heatmap" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={cn(
-                "px-4 py-2 text-sm font-semibold rounded-lg transition-all",
-                activeTab === tab.key
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-gray-50"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* SHIFT REGISTER TAB */}
-        {activeTab === "register" && (
-          <div className="p-4 space-y-4">
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name or ID..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-slate-400" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-400"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="present">Present</option>
-                  <option value="work_from_home">Work From Home</option>
-                  <option value="on_leave">On Leave</option>
-                  <option value="absent">Absent</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 text-xs text-slate-500 uppercase tracking-wider font-semibold border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3">Employee</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Check In</th>
-                    <th className="px-4 py-3">Check Out</th>
-                    <th className="px-4 py-3">Effective Hrs</th>
-                    <th className="px-4 py-3">Overtime</th>
-                    <th className="px-4 py-3">Flags</th>
-                    <th className="px-4 py-3">Remarks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {filteredLogs.map((log) => {
-                    const emp = employees.find((e) => e.id === log.employee_id);
-                    if (!emp) return null;
-                    const sb = statusBadge(log.status);
-                    return (
-                      <tr key={log.id} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <img src={emp.avatar} alt="" className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-100" />
-                            <div>
-                              <p className="font-semibold text-gray-900 text-sm">{emp.first_name} {emp.last_name}</p>
-                              <p className="text-xs text-slate-400">{emp.designation}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1 w-fit", sb.bg, sb.text, sb.border)}>
-                            <span className={cn("h-1.5 w-1.5 rounded-full", sb.dot)} />{log.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 font-mono text-sm text-gray-700">{log.check_in}</td>
-                        <td className="px-4 py-3.5 font-mono text-sm text-gray-700">{log.check_out}</td>
-                        <td className="px-4 py-3.5">
-                          <span className="font-bold text-gray-800">{log.working_hours > 0 ? `${log.working_hours}h` : "—"}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          {log.overtime_hours > 0 ? (
-                            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-xs font-semibold">
-                              +{log.overtime_hours}h OT
-                            </span>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex gap-1.5">
-                            {log.is_late && (
-                              <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-bold uppercase">Late</span>
-                            )}
-                            {log.is_early_exit && (
-                              <span className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-full text-[10px] font-bold uppercase">Early Exit</span>
-                            )}
-                            {!log.is_late && !log.is_early_exit && log.working_hours > 0 && (
-                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold uppercase">On Time</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-xs text-slate-500 max-w-48 truncate">{log.remarks || "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* MONTHLY HEATMAP TAB */}
-        {activeTab === "heatmap" && (
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-gray-900">June 2026 — Attendance Density</h3>
-                <p className="text-sm text-slate-500">Daily attendance rate across the organization.</p>
-              </div>
-              <div className="flex items-center gap-3 text-xs font-medium">
-                <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-100 border border-emerald-200" /> 95%+</span>
-                <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-50 border border-emerald-100" /> 85-94%</span>
-                <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-blue-50 border border-blue-100" /> 75-84%</span>
-                <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-amber-50 border border-amber-100" /> 60-74%</span>
-                <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-red-50 border border-red-100" /> &lt;60%</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-2">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                <div key={d} className="text-center text-xs font-semibold text-slate-500 py-1">{d}</div>
-              ))}
-              {/* Offset for June 2026 starting on Monday */}
-              {heatmapDays.map((day) => (
-                <div
-                  key={day.day}
-                  className={cn(
-                    "aspect-square rounded-lg border flex flex-col items-center justify-center text-center cursor-default transition-all hover:shadow-sm",
-                    getHeatColor(day.rate, day.isWeekend)
-                  )}
-                  title={`Jun ${day.day}: ${day.isWeekend ? "Weekend" : `${day.rate}% attendance`}`}
-                >
-                  <span className="text-xs font-bold">{day.day}</span>
-                  {!day.isWeekend && <span className="text-[9px] font-semibold">{day.rate}%</span>}
-                </div>
-              ))}
-            </div>
-
-          </div>
-        )}
-
-
-      </div>
     </div>
   );
 }
