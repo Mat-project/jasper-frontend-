@@ -38,18 +38,18 @@ const WorkerRow = React.memo(({
 }) => {
   return (
     <tr className="hover:bg-slate-850/80 transition-colors even:bg-slate-900/50 odd:bg-slate-850/30 border-b border-slate-800">
-      <td className="px-6 py-3 font-mono font-bold text-slate-300 text-xs border-r border-slate-800">
-        {worker.code || "—"}
+      <td className="px-8 py-4 font-mono font-bold text-slate-300 text-xs border-r border-slate-800 min-w-[150px]">
+        {worker.code || "-"}
       </td>
-      <td className="px-6 py-3 font-bold text-white border-r border-slate-800">
-        {worker.name || "—"}
+      <td className="px-8 py-4 font-bold text-white border-r border-slate-800 min-w-[240px]">
+        {worker.name || "-"}
       </td>
-      <td className="px-6 py-3 border-r border-slate-800">
+      <td className="px-8 py-4 border-r border-slate-800 min-w-[220px]">
         <span className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs font-medium text-slate-300">
-          {worker.department || "—"}
+          {worker.department || "-"}
         </span>
       </td>
-      <td className="px-6 py-3 border-r border-slate-800">
+      <td className="px-8 py-4 border-r border-slate-800 min-w-[340px]">
         <div className="flex justify-center">
           <div className="inline-flex rounded-lg border border-slate-700 p-0.5 bg-slate-950">
             {(["Present", "Absent", "Half-Day", "On Duty"] as const).map((st) => {
@@ -79,7 +79,7 @@ const WorkerRow = React.memo(({
           </div>
         </div>
       </td>
-      <td className="px-6 py-3 w-32 border-r border-slate-800">
+      <td className="px-8 py-4 min-w-[160px] border-r border-slate-800">
         <input
           type="number"
           min="0"
@@ -91,7 +91,7 @@ const WorkerRow = React.memo(({
           className="w-24 px-2 py-1.5 border border-slate-750 bg-slate-850 text-white rounded-lg text-center font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
         />
       </td>
-      <td className="px-6 py-3 min-w-[200px]">
+      <td className="px-8 py-4 min-w-[320px]">
         <input
           type="text"
           defaultValue={worker.remarks}
@@ -124,7 +124,7 @@ export default function BulkAttendancePortal() {
     const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
     const fileName = `EOMS_GLOBAL_ATTENDANCE_LEDGER_${exportMonth.toUpperCase()}_${exportYear}.xls`;
     
-    let xmlContent = `<?xml version="1.0"?>
+    let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -141,27 +141,32 @@ export default function BulkAttendancePortal() {
    <Protection/>
   </Style>
   <Style ss:ID="headerCell">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#000000"/>
-   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#0F172A"/>
+   <Interior ss:Color="#CBD5E1" ss:Pattern="Solid"/>
    <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
    </Borders>
   </Style>
   <Style ss:ID="corporateCell">
    <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
    <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
    </Borders>
   </Style>
  </Styles>
  <Worksheet ss:Name="Attendance Ledger">
-  <Table>`;
+  <Table>
+   <Column ss:Width="100"/>
+   <Column ss:Width="160"/>
+   <Column ss:Width="150"/>
+   <Column ss:Width="45" ss:Span="30"/>
+   <Column ss:Width="120" ss:Span="6"/>`;
 
     xmlContent += '\n   <Row ss:Height="25">';
     xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
@@ -234,8 +239,8 @@ export default function BulkAttendancePortal() {
       const totalRosterDays = present + absent + halfDay + onDuty;
       const rate = totalRosterDays > 0 ? Math.round((netPayable / totalRosterDays) * 100) : 0;
 
-      const safeName = w.name || "—";
-      const safeDept = w.department || "—";
+      const safeName = w.name || "-";
+      const safeDept = w.department || "-";
 
       xmlContent += '\n   <Row ss:Height="20">';
       xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
@@ -259,7 +264,7 @@ export default function BulkAttendancePortal() {
  </Worksheet>
 </Workbook>`;
 
-    const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel" });
+    const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -281,7 +286,7 @@ export default function BulkAttendancePortal() {
     const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
     const fileName = `EOMS_GLOBAL_ATTENDANCE_YEARLY_SUMMARY_${exportYear}.xls`;
     
-    let xmlContent = `<?xml version="1.0"?>
+    let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -298,27 +303,32 @@ export default function BulkAttendancePortal() {
    <Protection/>
   </Style>
   <Style ss:ID="headerCell">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#000000"/>
-   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#0F172A"/>
+   <Interior ss:Color="#CBD5E1" ss:Pattern="Solid"/>
    <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#475569"/>
    </Borders>
   </Style>
   <Style ss:ID="corporateCell">
    <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
    <Borders>
-    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
-    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
    </Borders>
   </Style>
  </Styles>
  <Worksheet ss:Name="Yearly Summary">
-  <Table>`;
+  <Table>
+   <Column ss:Width="100"/>
+   <Column ss:Width="160"/>
+   <Column ss:Width="150"/>
+   <Column ss:Width="65" ss:Span="11"/>
+   <Column ss:Width="120" ss:Span="3"/>`;
 
     xmlContent += '\n   <Row ss:Height="25">';
     xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
@@ -354,8 +364,8 @@ export default function BulkAttendancePortal() {
 
       const totalActive = annualPresent + annualAbsent;
       const rate = totalActive > 0 ? Math.round((annualPresent / totalActive) * 100) : 0;
-      const safeName = w.name || "—";
-      const safeDept = w.department || "—";
+      const safeName = w.name || "-";
+      const safeDept = w.department || "-";
 
       xmlContent += '\n   <Row ss:Height="20">';
       xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
@@ -376,7 +386,7 @@ export default function BulkAttendancePortal() {
  </Worksheet>
 </Workbook>`;
 
-    const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel" });
+    const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -400,7 +410,7 @@ export default function BulkAttendancePortal() {
   const departmentsList = useMemo(() => {
     const depts = new Set<string>();
     workers.forEach((w) => {
-      if (w.department && w.department !== "—") {
+      if (w.department && w.department !== "-") {
         depts.add(w.department);
       }
     });
@@ -417,9 +427,9 @@ export default function BulkAttendancePortal() {
         const fullName = `${first} ${last}`.trim();
         return {
           id: emp.id,
-          code: emp.employee_code || emp.id.substring(0, 8) || "—",
-          name: fullName || "—",
-          department: emp.department || "—",
+          code: emp.employee_code || emp.id.substring(0, 8) || "-",
+          name: fullName || "-",
+          department: emp.department || "-",
           status: "Present" as const,
           overtime: 0,
           remarks: "",
@@ -705,12 +715,12 @@ export default function BulkAttendancePortal() {
                 <table className="w-full text-left border-collapse border border-slate-800">
                   <thead>
                     <tr className="bg-slate-950 border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      <th className="px-6 py-4 border-r border-slate-800">Emp Code</th>
-                      <th className="px-6 py-4 border-r border-slate-800">Full Name</th>
-                      <th className="px-6 py-4 border-r border-slate-800">Department/Section</th>
-                      <th className="px-6 py-4 border-r border-slate-800 text-center">Roster Daily Status</th>
-                      <th className="px-6 py-4 border-r border-slate-800">Overtime Hours</th>
-                      <th className="px-6 py-4">Admin Audit Flags / Remarks</th>
+                      <th className="px-8 py-4 border-r border-slate-800 min-w-[150px]">Employee Code</th>
+                      <th className="px-8 py-4 border-r border-slate-800 min-w-[240px]">Full Name</th>
+                      <th className="px-8 py-4 border-r border-slate-800 min-w-[220px]">Department/Section</th>
+                      <th className="px-8 py-4 border-r border-slate-800 min-w-[340px] text-center">Roster Daily Status</th>
+                      <th className="px-8 py-4 border-r border-slate-800 min-w-[160px]">Overtime Hours</th>
+                      <th className="px-8 py-4 min-w-[320px]">Admin Audit Flags / Remarks</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800 text-sm">
