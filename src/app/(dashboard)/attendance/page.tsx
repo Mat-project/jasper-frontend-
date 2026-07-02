@@ -10,8 +10,9 @@ import {
   CalendarDays,
   FileCheck,
   UserCheck,
-  UserPlus,
+  RefreshCw,
 } from "lucide-react";
+import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
 interface WorkerRecord {
@@ -23,35 +24,6 @@ interface WorkerRecord {
   overtime: number;
   remarks: string;
 }
-
-const DEPARTMENTS = [
-  "Production A",
-  "Production B",
-  "Fabrication",
-  "Machining",
-  "Quality Control",
-];
-
-const baselineWorkers = (): WorkerRecord[] => [
-  {
-    id: "worker-1",
-    code: "EMP1001",
-    name: "John Doe",
-    department: "Production A",
-    status: "Present",
-    overtime: 0,
-    remarks: "Baseline shift",
-  },
-  {
-    id: "worker-2",
-    code: "EMP1002",
-    name: "Jane Smith",
-    department: "Fabrication",
-    status: "On Duty",
-    overtime: 1.5,
-    remarks: "Site assignment",
-  },
-];
 
 // Memoized high-performance row to prevent lag when editing fields
 const WorkerRow = React.memo(({
@@ -65,34 +37,16 @@ const WorkerRow = React.memo(({
 }) => {
   return (
     <tr className="hover:bg-slate-50/50 transition-colors">
-      <td className="px-6 py-3 w-40">
-        <input
-          type="text"
-          defaultValue={worker.code}
-          onBlur={(e) => onUpdateField(worker.id, "code", e.target.value)}
-          className="w-full px-2 py-1.5 border border-gray-200 bg-gray-50 rounded-lg font-mono text-xs text-gray-900 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-        />
+      <td className="px-6 py-3 font-mono font-bold text-gray-900 text-xs">
+        {worker.code || "—"}
       </td>
-      <td className="px-6 py-3 w-60">
-        <input
-          type="text"
-          defaultValue={worker.name}
-          onBlur={(e) => onUpdateField(worker.id, "name", e.target.value)}
-          className="w-full px-2 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-sm text-gray-900 font-bold focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-        />
+      <td className="px-6 py-3 font-bold text-gray-800">
+        {worker.name || "—"}
       </td>
-      <td className="px-6 py-3 w-48">
-        <select
-          defaultValue={worker.department}
-          onChange={(e) => onUpdateField(worker.id, "department", e.target.value)}
-          className="w-full px-2 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-400"
-        >
-          {DEPARTMENTS.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
+      <td className="px-6 py-3">
+        <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-full text-xs font-medium text-slate-600">
+          {worker.department || "—"}
+        </span>
       </td>
       <td className="px-6 py-3">
         <div className="flex justify-center">
@@ -157,20 +111,66 @@ export default function BulkAttendancePortal() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [deptFilter, setDeptFilter] = useState<string>("All");
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [loading, setLoading] = useState<boolean>(true);
   const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: "", show: false });
 
-  // Onboarding inputs state
-  const [newCode, setNewCode] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newDept, setNewDept] = useState("Production A");
-
   const itemsPerPage = 50;
+
+  // Extract all unique departments dynamically from current dataset
+  const departmentsList = useMemo(() => {
+    const depts = new Set<string>();
+    workers.forEach((w) => {
+      if (w.department && w.department !== "—") {
+        depts.add(w.department);
+      }
+    });
+    return Array.from(depts).sort();
+  }, [workers]);
+
+  const syncRoster = useCallback(async (showToast: boolean = false) => {
+    try {
+      setLoading(true);
+      const empData = await getEmployees();
+      const mapped = empData.map((emp: any) => {
+        const first = emp.first_name || "";
+        const last = emp.last_name || "";
+        const fullName = `${first} ${last}`.trim();
+        return {
+          id: emp.id,
+          code: emp.employee_code || emp.id.substring(0, 8) || "—",
+          name: fullName || "—",
+          department: emp.department || "—",
+          status: "Present" as const,
+          overtime: 0,
+          remarks: "",
+        };
+      });
+      setWorkers(mapped);
+      
+      if (showToast) {
+        setToast({
+          message: "Roster synchronized successfully with live employee records!",
+          show: true,
+        });
+        setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
+      setToast({
+        message: "Failed to synchronize roster from database.",
+        show: true,
+      });
+      setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
     setSelectedDate(today);
-    setWorkers(baselineWorkers());
-  }, []);
+    syncRoster(false);
+  }, [syncRoster]);
 
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
@@ -206,48 +206,6 @@ export default function BulkAttendancePortal() {
       prev.map((w) => (w.id === id ? { ...w, [field]: value } : w))
     );
   }, []);
-
-  const handleAddWorker = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCode.trim() || !newName.trim()) {
-      setToast({
-        message: "Please enter both Worker ID and Worker Name!",
-        show: true,
-      });
-      setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
-      return;
-    }
-
-    const formattedCode = newCode.trim().toUpperCase();
-    if (workers.some((w) => w.code === formattedCode)) {
-      setToast({
-        message: `Worker ID ${formattedCode} already exists!`,
-        show: true,
-      });
-      setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
-      return;
-    }
-
-    const newWorker: WorkerRecord = {
-      id: `worker-${Date.now()}`,
-      code: formattedCode,
-      name: newName.trim(),
-      department: newDept,
-      status: "Present",
-      overtime: 0,
-      remarks: "",
-    };
-
-    setWorkers((prev) => [...prev, newWorker]);
-    setNewCode("");
-    setNewName("");
-
-    setToast({
-      message: `Successfully registered ${newWorker.name}!`,
-      show: true,
-    });
-    setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
-  };
 
   const handleMarkAllPresent = () => {
     const filteredIds = new Set(filteredWorkers.map((w) => w.id));
@@ -304,14 +262,25 @@ export default function BulkAttendancePortal() {
               <span className="p-1.5 bg-blue-50 rounded-lg">
                 <Clock className="h-5 w-5 text-blue-600" />
               </span>
-              Dynamic Attendance Portal
+              Database Roster Attendance Portal
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Admin dynamic logging portal optimized for infinite scaling.
+              Admin bulk attendance logging portal synchronized automatically with active Master employee records.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Sync Roster Button */}
+            <button
+              onClick={() => syncRoster(true)}
+              disabled={loading}
+              className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-slate-700 disabled:opacity-50 rounded-lg text-sm font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+            >
+              <RefreshCw className={cn("h-4 w-4 text-blue-600", loading && "animate-spin")} />
+              Sync Database Roster
+            </button>
+
+            {/* Date Selection */}
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
               <CalendarDays className="h-4 w-4 text-blue-500" />
               <label htmlFor="log-date" className="sr-only">Select Date</label>
@@ -324,62 +293,6 @@ export default function BulkAttendancePortal() {
               />
             </div>
           </div>
-        </div>
-
-        {/* Worker Onboarding Card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="p-1 bg-blue-50 rounded-md">
-              <UserPlus className="h-4 w-4 text-blue-600" />
-            </span>
-            <h2 className="text-sm font-bold text-gray-900">Quick Worker Registration</h2>
-          </div>
-          
-          <form onSubmit={handleAddWorker} className="flex flex-col md:flex-row items-end gap-4">
-            <div className="flex-1 w-full space-y-1.5">
-              <label className="text-xs font-bold text-slate-500">Worker ID</label>
-              <input
-                type="text"
-                placeholder="e.g. EMP2001"
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-              />
-            </div>
-
-            <div className="flex-2 w-full space-y-1.5">
-              <label className="text-xs font-bold text-slate-500">Worker Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Robert Downey"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-              />
-            </div>
-
-            <div className="flex-1 w-full space-y-1.5">
-              <label className="text-xs font-bold text-slate-500">Department</label>
-              <select
-                value={newDept}
-                onChange={(e) => setNewDept(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 font-semibold focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-              >
-                {DEPARTMENTS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full md:w-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5 h-10"
-            >
-              Add Worker
-            </button>
-          </form>
         </div>
 
         {/* Toolbar Controls */}
@@ -406,7 +319,7 @@ export default function BulkAttendancePortal() {
                 className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 font-medium focus:outline-none focus:border-blue-400 w-full sm:w-44"
               >
                 <option value="All">All Departments</option>
-                {DEPARTMENTS.map((d) => (
+                {departmentsList.map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -428,73 +341,82 @@ export default function BulkAttendancePortal() {
         </div>
 
         {/* High Density Table Block */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="px-6 py-4">Worker Code</th>
-                  <th className="px-6 py-4">Worker Name</th>
-                  <th className="px-6 py-4">Department</th>
-                  <th className="px-6 py-4 text-center">Roster Status</th>
-                  <th className="px-6 py-4">OT Hours</th>
-                  <th className="px-6 py-4">Remarks / Flags</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-sm">
-                {paginatedWorkers.length > 0 ? (
-                  paginatedWorkers.map((w) => (
-                    <WorkerRow
-                      key={w.id}
-                      worker={w}
-                      onStatusChange={handleStatusChange}
-                      onUpdateField={handleUpdateField}
-                    />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
-                      No registered workers match the filters. Add some above!
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Controls */}
-          {showPagination && totalPages > 1 && (
-            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-              <div className="text-xs font-semibold text-slate-500">
-                Showing <b className="text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</b> to{" "}
-                <b className="text-gray-900">
-                  {Math.min(currentPage * itemsPerPage, filteredWorkers.length)}
-                </b>{" "}
-                of <b className="text-gray-900">{filteredWorkers.length}</b> filtered workers
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                
-                <span className="text-xs font-semibold text-slate-600">
-                  Page <b className="text-gray-900">{currentPage}</b> of {totalPages}
-                </span>
-
-                <button
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-fade-in">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+              <RefreshCw className="h-8 w-8 text-blue-600 animate-spin" />
+              <p className="text-sm font-semibold text-slate-500">Synchronizing database employee records...</p>
             </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      <th className="px-6 py-4">Worker Code</th>
+                      <th className="px-6 py-4">Worker Name</th>
+                      <th className="px-6 py-4">Department</th>
+                      <th className="px-6 py-4 text-center">Roster Status</th>
+                      <th className="px-6 py-4">OT Hours</th>
+                      <th className="px-6 py-4">Remarks / Flags</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-sm">
+                    {paginatedWorkers.length > 0 ? (
+                      paginatedWorkers.map((w) => (
+                        <WorkerRow
+                          key={w.id}
+                          worker={w}
+                          onStatusChange={handleStatusChange}
+                          onUpdateField={handleUpdateField}
+                        />
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
+                          No synchronized workers found matching the filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {showPagination && totalPages > 1 && (
+                <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+                  <div className="text-xs font-semibold text-slate-500">
+                    Showing <b className="text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</b> to{" "}
+                    <b className="text-gray-900">
+                      {Math.min(currentPage * itemsPerPage, filteredWorkers.length)}
+                    </b>{" "}
+                    of <b className="text-gray-900">{filteredWorkers.length}</b> filtered workers
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => p - 1)}
+                      className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    
+                    <span className="text-xs font-semibold text-slate-600">
+                      Page <b className="text-gray-900">{currentPage}</b> of {totalPages}
+                    </span>
+
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => p + 1)}
+                      className="p-1.5 bg-white border border-gray-200 rounded-lg text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:text-slate-500 transition-colors shadow-sm"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
