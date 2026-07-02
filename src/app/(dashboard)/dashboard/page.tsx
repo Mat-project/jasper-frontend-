@@ -265,7 +265,7 @@ export default function DashboardPage() {
 
   // Render Employee Dashboard
   if (dashboardData) {
-    const { today_attendance, assigned_projects, production_summary, leave_status, recent_documents } = dashboardData;
+    const { today_attendance, assigned_projects, production_summary, recent_documents } = dashboardData;
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -283,12 +283,11 @@ export default function DashboardPage() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             { label: "Assigned Projects", value: assigned_projects.length, icon: FolderKanban, color: "text-emerald-400 bg-emerald-500/10" },
             { label: "Total Sheets Detailing", value: production_summary.total_quantity, icon: Factory, color: "text-brand-400 bg-brand-500/10" },
             { label: "Total Approved Tonnage", value: `${production_summary.total_tonnage} MT`, icon: Activity, color: "text-purple-400 bg-purple-500/10" },
-            { label: "Leaves Taken", value: leave_status.approved, icon: CheckCircle, color: "text-emerald-400 bg-emerald-500/10" },
           ].map((card, idx) => (
             <div key={idx} className="rounded-xl border border-border bg-card p-5 shadow-sm flex items-center justify-between">
               <div>

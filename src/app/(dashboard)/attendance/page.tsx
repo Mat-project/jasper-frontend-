@@ -13,35 +13,27 @@ import {
   ArrowDownRight,
   Laptop,
   UserCheck,
-  UserX,
-  ThumbsUp,
-  ThumbsDown,
-  X,
 } from "lucide-react";
 import {
   EnterpriseAttendance,
-  EnterpriseLeaveRequest,
 } from "@/data/mockEnterpriseData";
-import { getAttendance, getLeaves, approveLeave, rejectLeave } from "@/lib/api/attendance";
+import { getAttendance } from "@/lib/api/attendance";
 import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
 export default function EnterpriseAttendancePage() {
   const [attendanceLogs, setAttendanceLogs] = useState<EnterpriseAttendance[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<EnterpriseLeaveRequest[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   React.useEffect(() => {
     async function loadData() {
       try {
-        const [attData, leaveData, empData] = await Promise.all([
+        const [attData, empData] = await Promise.all([
           getAttendance(),
-          getLeaves(),
           getEmployees(),
         ]);
         setAttendanceLogs(attData);
-        setLeaveRequests(leaveData);
         const mappedEmps = empData.map((emp: any) => ({
           id: emp.id,
           code: emp.employee_code || emp.id.substring(0, 8),
@@ -62,17 +54,14 @@ export default function EnterpriseAttendancePage() {
     }
     loadData();
   }, []);
-  const [activeTab, setActiveTab] = useState<"register" | "heatmap" | "leave_desk">("register");
+  const [activeTab, setActiveTab] = useState<"register" | "heatmap">("register");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const totalStaff = employees.length;
   const presentCount = attendanceLogs.filter((a) => a.status === "Present").length;
   const wfhCount = attendanceLogs.filter((a) => a.status === "Work From Home").length;
   const lateCount = attendanceLogs.filter((a) => a.is_late).length;
-  const pendingLeaves = leaveRequests.filter((l) => l.status === "Pending").length;
   const attendanceRate = Math.round(((presentCount + wfhCount) / totalStaff) * 100);
 
   const filteredLogs = attendanceLogs.filter((a) => {
@@ -83,26 +72,7 @@ export default function EnterpriseAttendancePage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleApproveLeave = async (id: string) => {
-    try {
-      const updated = await approveLeave(id);
-      setLeaveRequests(leaveRequests.map((l) => (l.id === id ? updated : l)));
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const handleRejectLeave = async (id: string) => {
-    if (!rejectReason.trim()) return;
-    try {
-      const updated = await rejectLeave(id, rejectReason);
-      setLeaveRequests(leaveRequests.map((l) => (l.id === id ? updated : l)));
-      setRejectingId(null);
-      setRejectReason("");
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const statusBadge = (status: string) => {
     const map: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -148,13 +118,13 @@ export default function EnterpriseAttendancePage() {
           <div className="flex items-center gap-2 text-xs text-slate-400 font-medium mb-1">
             <span>Enterprise HRMS</span>
             <ChevronRight className="h-3 w-3" />
-            <span className="text-slate-600 font-semibold">Attendance & Leave Management</span>
+            <span className="text-slate-600 font-semibold">Attendance Management</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
             <span className="p-1.5 bg-blue-50 rounded-lg"><Clock className="h-5 w-5 text-blue-600" /></span>
             Attendance Management
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Monitor daily attendance, shift adherence, and leave approvals.</p>
+          <p className="text-sm text-slate-500 mt-1">Monitor daily attendance and shift adherence.</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-slate-600 shadow-sm flex items-center gap-1.5">
@@ -164,7 +134,7 @@ export default function EnterpriseAttendancePage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           {
             label: "Today\u2019s Presence",
@@ -189,14 +159,6 @@ export default function EnterpriseAttendancePage() {
             icon: <AlertCircle className="h-5 w-5 text-amber-500" />,
             iconBg: "bg-amber-50",
             trend: { value: "-1", positive: true },
-          },
-          {
-            label: "Pending Leave Requests",
-            value: pendingLeaves,
-            sub: "Awaiting approval",
-            icon: <UserX className="h-5 w-5 text-red-500" />,
-            iconBg: "bg-red-50",
-            trend: null,
           },
         ].map((card, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
@@ -224,7 +186,6 @@ export default function EnterpriseAttendancePage() {
           {[
             { key: "register", label: "Shift Register" },
             { key: "heatmap", label: "Monthly Heatmap" },
-            { key: "leave_desk", label: `Leave Approval Desk (${pendingLeaves})` },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -381,152 +342,10 @@ export default function EnterpriseAttendancePage() {
               ))}
             </div>
 
-            {/* Leave Balances */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
-              {employees.map((emp) => {
-                const bal = {
-                  casual_total: 12, casual_used: 2,
-                  sick_total: 10, sick_used: 1,
-                  earned_total: 15, earned_used: 4,
-                  unpaid_used: 0
-                };
-                if (!bal) return null;
-                const leaveTypes = [
-                  { label: "Casual", used: bal.casual_used, total: bal.casual_total },
-                  { label: "Sick", used: bal.sick_used, total: bal.sick_total },
-                  { label: "Earned", used: bal.earned_used, total: bal.earned_total },
-                  { label: "Unpaid", used: bal.unpaid_used, total: 0 },
-                ];
-                return (
-                <div key={emp.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <img src={emp.avatar} alt="" className="h-8 w-8 rounded-full ring-2 ring-gray-100 object-cover" />
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">{emp.first_name}</p>
-                      <p className="text-[10px] text-slate-400">{emp.designation}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    {leaveTypes.map((lt) => (
-                      <div key={lt.label} className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500">{lt.label}</span>
-                        <span className="font-bold text-gray-800">{lt.used}{lt.total > 0 ? `/${lt.total}` : ""}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                );
-              })}
-            </div>
           </div>
         )}
 
-        {/* LEAVE APPROVAL DESK TAB */}
-        {activeTab === "leave_desk" && (
-          <div className="p-4 space-y-4">
-            <div>
-              <h3 className="text-base font-bold text-gray-900">Leave Approval Queue</h3>
-              <p className="text-sm text-slate-500">Review and process pending leave requests.</p>
-            </div>
-            <div className="space-y-3">
-              {leaveRequests.map((leave) => {
-                const emp = employees.find((e) => e.id === leave.employee_id);
-                if (!emp) return null;
-                const isPending = leave.status === "Pending";
-                const leaveBg =
-                  leave.status === "Approved" ? "border-emerald-200 bg-emerald-50/30" :
-                  leave.status === "Rejected" ? "border-red-200 bg-red-50/30" :
-                  "border-gray-200 bg-white";
-                return (
-                  <div key={leave.id} className={cn("border rounded-xl p-4 shadow-sm", leaveBg)}>
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <div className="flex items-center gap-3">
-                        <img src={emp.avatar} alt="" className="h-10 w-10 rounded-full ring-2 ring-gray-100 object-cover" />
-                        <div>
-                          <p className="font-bold text-gray-900 text-sm">{emp.first_name} {emp.last_name}</p>
-                          <p className="text-xs text-slate-500">{emp.designation} · {emp.department}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-xs text-slate-500">Leave Type</p>
-                          <p className="text-sm font-bold text-gray-900">{leave.leave_type}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-slate-500">Duration</p>
-                          <p className="text-sm font-bold text-gray-900">{leave.start_date} → {leave.end_date}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-slate-500">Days</p>
-                          <p className="text-sm font-bold text-gray-900">{leave.days_count}</p>
-                        </div>
-                        {isPending ? (
-                          <div className="flex gap-2 ml-4">
-                            <button
-                              onClick={() => handleApproveLeave(leave.id)}
-                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
-                            >
-                              <ThumbsUp className="h-3 w-3" /> Approve
-                            </button>
-                            <button
-                              onClick={() => setRejectingId(leave.id)}
-                              className="px-3.5 py-1.5 bg-white border border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                            >
-                              <ThumbsDown className="h-3 w-3" /> Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-xs font-bold border",
-                            leave.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
-                          )}>
-                            {leave.status}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {leave.reason && (
-                      <p className="mt-2 text-sm text-slate-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-                        <span className="font-semibold text-slate-700">Reason:</span> {leave.reason}
-                      </p>
-                    )}
-                    {leave.rejection_reason && (
-                      <p className="mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                        <span className="font-semibold">Rejection Note:</span> {leave.rejection_reason}
-                      </p>
-                    )}
 
-                    {/* Inline rejection reason input */}
-                    {rejectingId === leave.id && (
-                      <div className="mt-3 flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder="Enter rejection reason (mandatory)..."
-                          value={rejectReason}
-                          onChange={(e) => setRejectReason(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
-                        />
-                        <button
-                          onClick={() => handleRejectLeave(leave.id)}
-                          disabled={!rejectReason.trim()}
-                          className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold disabled:opacity-40 transition-colors"
-                        >
-                          Confirm Reject
-                        </button>
-                        <button
-                          onClick={() => { setRejectingId(null); setRejectReason(""); }}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <X className="h-4 w-4 text-slate-500" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
