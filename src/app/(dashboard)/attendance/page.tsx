@@ -120,65 +120,53 @@ export default function BulkAttendancePortal() {
   const [exportMonth, setExportMonth] = useState<string>("June");
   const [exportYear, setExportYear] = useState<string>("2026");
 
-  const handleExportMonthly = () => {
-    const payload = {
-      reportType: "Consolidated Monthly Log Document",
-      target: exportTarget,
-      period: `${exportMonth} ${exportYear}`,
-      generatedAt: new Date().toISOString(),
-      workersSummary: workers.map(w => ({
-        code: w.code,
-        name: w.name,
-        department: w.department,
-        aggregatedStats: {
-          daysPresent: w.status === "Present" ? 22 : 20,
-          daysAbsent: w.status === "Absent" ? 2 : 1,
-          totalOvertimeHours: w.overtime || 0
-        }
-      }))
-    };
+  const downloadCSV = (data: WorkerRecord[], fileName: string, isYearly: boolean = false) => {
+    let csvContent = "Worker Code,Worker Name,Department,Date/Period,Roster Status,Overtime Hours,Remarks\n";
+    
+    data.forEach((w) => {
+      const period = isYearly ? exportYear : `${exportMonth} ${exportYear}`;
+      const safeName = (w.name || "").replace(/"/g, '""');
+      const safeDept = (w.department || "").replace(/"/g, '""');
+      const safeRemarks = (w.remarks || "").replace(/"/g, '""');
+      csvContent += `"${w.code}","${safeName}","${safeDept}","${period}","${w.status}","${w.overtime}","${safeRemarks}"\n`;
+    });
 
-    console.log("=== EXPORTING MONTHLY HISTORY REPORT ===");
-    console.log(payload);
-    console.log("=========================================");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportMonthly = () => {
+    const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
+    const fileName = `EOMS_Attendance_Report_${exportMonth}_${exportYear}.csv`;
+    
+    downloadCSV(targets, fileName, false);
 
     setToast({
-      message: `Generated Consolidated Monthly Log Document successfully for ${exportMonth} ${exportYear}!`,
+      message: "Downloading roster sheet... Open this downloaded file in Google Sheets to view full history!",
       show: true,
     });
-    setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+    setTimeout(() => setToast((t) => ({ ...t, show: false })), 5000);
   };
 
   const handleExportYearly = () => {
-    const payload = {
-      reportType: "Complete Annual Attendance Audit Report",
-      target: exportTarget,
-      year: exportYear,
-      generatedAt: new Date().toISOString(),
-      workersSummary: workers.map(w => ({
-        code: w.code,
-        name: w.name,
-        department: w.department,
-        monthlyMatrix: Array.from({ length: 12 }, (_, i) => ({
-          month: [
-            "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-          ][i],
-          presentCount: w.status === "Present" ? 21 + (i % 2) : 19,
-          overtimeHours: w.overtime ? w.overtime * (1 + (i % 3)) : 0
-        }))
-      }))
-    };
-
-    console.log("=== EXPORTING YEARLY HISTORY REPORT ===");
-    console.log(payload);
-    console.log("========================================");
+    const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
+    const fileName = `EOMS_Attendance_Report_Year_${exportYear}.csv`;
+    
+    downloadCSV(targets, fileName, true);
 
     setToast({
-      message: `Generated Complete Annual Attendance Audit Report successfully for Year ${exportYear}!`,
+      message: "Downloading roster sheet... Open this downloaded file in Google Sheets to view full history!",
       show: true,
     });
-    setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+    setTimeout(() => setToast((t) => ({ ...t, show: false })), 5000);
   };
 
   const itemsPerPage = 50;
