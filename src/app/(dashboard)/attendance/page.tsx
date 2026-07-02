@@ -586,7 +586,7 @@ export default function BulkAttendancePortal() {
         </div>
 
         {/* Exporter Dashboard Card */}
-        <div className="bg-slate-900 border border-slate-800 text-white rounded-xl shadow-lg p-6 space-y-4">
+        <div className="bg-slate-900 border border-slate-800 text-white rounded-xl shadow-lg p-4 space-y-4">
           <div className="flex items-center gap-2">
             <span className="p-1 bg-slate-800 rounded-md">
               <FileDown className="h-5 w-5 text-emerald-400" />
@@ -597,9 +597,9 @@ export default function BulkAttendancePortal() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end w-full">
             {/* Target Select */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 col-span-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Employees</label>
               <select
                 value={exportTarget}
@@ -612,7 +612,7 @@ export default function BulkAttendancePortal() {
             </div>
 
             {/* Target Month */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 col-span-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Month</label>
               <select
                 value={exportMonth}
@@ -626,7 +626,7 @@ export default function BulkAttendancePortal() {
             </div>
 
             {/* Target Year */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 col-span-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Year</label>
               <select
                 value={exportYear}
@@ -640,7 +640,7 @@ export default function BulkAttendancePortal() {
             </div>
 
             {/* Buttons Group */}
-            <div className="flex gap-2 w-full">
+            <div className="col-span-1 md:col-span-2 flex gap-3 w-full">
               <button
                 onClick={handleExportMonthly}
                 className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5 h-9"
