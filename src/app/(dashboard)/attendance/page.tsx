@@ -122,13 +122,62 @@ export default function BulkAttendancePortal() {
 
   const handleExportMonthly = () => {
     const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
-    const fileName = `EOMS_GLOBAL_ATTENDANCE_LEDGER_${exportMonth.toUpperCase()}_${exportYear}.csv`;
+    const fileName = `EOMS_GLOBAL_ATTENDANCE_LEDGER_${exportMonth.toUpperCase()}_${exportYear}.xls`;
     
-    let csvContent = "Employee Code,Full Name,Department,";
+    let xmlContent = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:CharSet="1" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="headerCell">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="corporateCell">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+   </Borders>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Attendance Ledger">
+  <Table>`;
+
+    xmlContent += '\n   <Row ss:Height="25">';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Full Name</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Department</Data></Cell>';
     for (let day = 1; day <= 31; day++) {
-      csvContent += `Day ${String(day).padStart(2, "0")},`;
+      xmlContent += `<Cell ss:StyleID="headerCell"><Data ss:Type="String">Day ${String(day).padStart(2, "0")}</Data></Cell>`;
     }
-    csvContent += "Total Days Present,Total Days Absent,Total Half-Days,Total On-Duty,Total OT Hours Added,Net Payable Days for Payroll,Compliance Attendance Rate %\n";
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Days Present</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Days Absent</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Half-Days</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total On-Duty</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total OT Hours Added</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Net Payable Days for Payroll</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Compliance Attendance Rate %</Data></Cell>';
+    xmlContent += '</Row>';
 
     const selectedDayNum = parseInt(selectedDate.split("-")[2]) || 26;
 
@@ -185,18 +234,32 @@ export default function BulkAttendancePortal() {
       const totalRosterDays = present + absent + halfDay + onDuty;
       const rate = totalRosterDays > 0 ? Math.round((netPayable / totalRosterDays) * 100) : 0;
 
-      const safeName = (w.name || "").replace(/"/g, '""');
-      const safeDept = (w.department || "").replace(/"/g, '""');
+      const safeName = w.name || "—";
+      const safeDept = w.department || "—";
 
-      let row = `"${w.code}","${safeName}","${safeDept}",`;
+      xmlContent += '\n   <Row ss:Height="20">';
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeName}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeDept}</Data></Cell>`;
       dayCodes.forEach((code) => {
-        row += `"${code}",`;
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${code}</Data></Cell>`;
       });
-      row += `"${present}","${absent}","${halfDay}","${onDuty}","${totalOt.toFixed(1)}","${netPayable.toFixed(1)}","${rate}%"\n`;
-      csvContent += row;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${present}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${absent}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${halfDay}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${onDuty}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${totalOt.toFixed(1)}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${netPayable.toFixed(1)}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${rate}%</Data></Cell>`;
+      xmlContent += '</Row>';
     });
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    xmlContent += `
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -216,9 +279,59 @@ export default function BulkAttendancePortal() {
 
   const handleExportYearly = () => {
     const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
-    const fileName = `EOMS_GLOBAL_ATTENDANCE_YEARLY_SUMMARY_${exportYear}.csv`;
+    const fileName = `EOMS_GLOBAL_ATTENDANCE_YEARLY_SUMMARY_${exportYear}.xls`;
     
-    let csvContent = "Employee Code,Full Name,Department,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,Total Present,Total Absent,Total OT Hours,Compliance Rate\n";
+    let xmlContent = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:CharSet="1" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="headerCell">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#000000"/>
+   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="corporateCell">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+   </Borders>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Yearly Summary">
+  <Table>`;
+
+    xmlContent += '\n   <Row ss:Height="25">';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Full Name</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Department</Data></Cell>';
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].forEach(month => {
+      xmlContent += `<Cell ss:StyleID="headerCell"><Data ss:Type="String">${month}</Data></Cell>`;
+    });
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Present</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Absent</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total OT Hours</Data></Cell>';
+    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Compliance Rate</Data></Cell>';
+    xmlContent += '</Row>';
 
     targets.forEach((w) => {
       let annualPresent = 0;
@@ -241,18 +354,29 @@ export default function BulkAttendancePortal() {
 
       const totalActive = annualPresent + annualAbsent;
       const rate = totalActive > 0 ? Math.round((annualPresent / totalActive) * 100) : 0;
-      const safeName = (w.name || "").replace(/"/g, '""');
-      const safeDept = (w.department || "").replace(/"/g, '""');
+      const safeName = w.name || "—";
+      const safeDept = w.department || "—";
 
-      let row = `"${w.code}","${safeName}","${safeDept}",`;
+      xmlContent += '\n   <Row ss:Height="20">';
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeName}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeDept}</Data></Cell>`;
       monthlyData.forEach((item) => {
-        row += `"${item}",`;
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${item}</Data></Cell>`;
       });
-      row += `"${annualPresent}","${annualAbsent}","${annualOt.toFixed(1)}","${rate}%"\n`;
-      csvContent += row;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualPresent}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualAbsent}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualOt.toFixed(1)}</Data></Cell>`;
+      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${rate}%</Data></Cell>`;
+      xmlContent += '</Row>';
     });
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    xmlContent += `
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
