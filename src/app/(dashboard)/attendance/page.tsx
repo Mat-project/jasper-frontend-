@@ -586,25 +586,25 @@ export default function BulkAttendancePortal() {
         </div>
 
         {/* Exporter Dashboard Card */}
-        <div className="bg-slate-900 border border-slate-800 text-white rounded-xl shadow-lg p-4 space-y-4">
+        <div className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl shadow-sm p-4 space-y-4">
           <div className="flex items-center gap-2">
-            <span className="p-1 bg-slate-800 rounded-md">
-              <FileDown className="h-5 w-5 text-emerald-400" />
+            <span className="p-1 bg-slate-100 rounded-md">
+              <FileDown className="h-5 w-5 text-emerald-600" />
             </span>
             <div>
-              <h2 className="text-sm font-bold text-slate-100">Roster Analytics & Document Exporter</h2>
-              <p className="text-[11px] text-slate-400 font-medium">Configure parameters to compile consolidate PDF/audit summaries.</p>
+              <h2 className="text-sm font-bold text-slate-900">Roster Analytics & Document Exporter</h2>
+              <p className="text-[11px] text-slate-500 font-medium">Configure parameters to compile consolidate PDF/audit summaries.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end w-full">
             {/* Target Select */}
             <div className="space-y-1.5 col-span-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Employees</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Target Employees</label>
               <select
                 value={exportTarget}
                 onChange={(e) => setExportTarget(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-white rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
+                className="w-full px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
               >
                 <option value="All Live Personnel Roster">All Live Personnel Roster</option>
                 <option value="Filtered Selection Only">Filtered Selection Only</option>
@@ -613,11 +613,11 @@ export default function BulkAttendancePortal() {
 
             {/* Target Month */}
             <div className="space-y-1.5 col-span-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Month</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Target Month</label>
               <select
                 value={exportMonth}
                 onChange={(e) => setExportMonth(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-white rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
+                className="w-full px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
               >
                 {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
                   <option key={m} value={m}>{m}</option>
@@ -627,11 +627,11 @@ export default function BulkAttendancePortal() {
 
             {/* Target Year */}
             <div className="space-y-1.5 col-span-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Target Year</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Target Year</label>
               <select
                 value={exportYear}
                 onChange={(e) => setExportYear(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-white rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
+                className="w-full px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
               >
                 {["2024", "2025", "2026", "2027"].map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -649,7 +649,7 @@ export default function BulkAttendancePortal() {
               </button>
               <button
                 onClick={handleExportYearly}
-                className="flex-1 px-3 py-2 bg-transparent border border-blue-500 hover:bg-blue-950 text-blue-400 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 h-9"
+                className="flex-1 px-3 py-2 bg-transparent border border-blue-500 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 h-9"
               >
                 <FileDown className="h-3.5 w-3.5" /> Export Yearly History
               </button>
