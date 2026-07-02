@@ -26,6 +26,76 @@ export default function EnterpriseAttendancePage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Time & Date state
+  const [time, setTime] = useState<string>("");
+  const [dateStr, setDateStr] = useState<string>("");
+  const [workMode, setWorkMode] = useState<string>("Office");
+  const [notes, setNotes] = useState<string>("");
+  const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
+  const [checkInTime, setCheckInTime] = useState<string | null>(null);
+  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: "", show: false });
+
+  // Clock effect
+  React.useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      setDateStr(now.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" }));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCheckInOut = () => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    if (!isCheckedIn) {
+      setIsCheckedIn(true);
+      setCheckInTime(timeStr);
+      setCheckOutTime(null);
+      
+      const newRecord: EnterpriseAttendance = {
+        id: "current-user-session",
+        employee_id: "current-user",
+        date: now.toISOString().split("T")[0],
+        check_in: timeStr,
+        check_out: "",
+        break_duration_mins: 0,
+        working_hours: 0,
+        overtime_hours: 0,
+        is_late: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15),
+        is_early_exit: false,
+        remarks: notes,
+        status: workMode === "Remote" ? "Work From Home" : "Present",
+      };
+      setAttendanceLogs(prev => [newRecord, ...prev]);
+      
+      setToast({
+        message: `Successfully checked in at ${timeStr} (${workMode})!`,
+        show: true
+      });
+      setTimeout(() => setToast(prev => ({ ...prev, show: false })), 5000);
+    } else {
+      setIsCheckedIn(false);
+      setCheckOutTime(timeStr);
+      
+      setAttendanceLogs(prev => prev.map(rec => {
+        if (rec.id === "current-user-session") {
+          return { ...rec, check_out: timeStr, remarks: notes };
+        }
+        return rec;
+      }));
+      
+      setToast({
+        message: `Successfully checked out at ${timeStr}!`,
+        show: true
+      });
+      setTimeout(() => setToast(prev => ({ ...prev, show: false })), 5000);
+    }
+  };
+
   React.useEffect(() => {
     async function loadData() {
       try {
@@ -45,7 +115,19 @@ export default function EnterpriseAttendancePage() {
           designation: emp.role || "Engineer",
           department: emp.department || "Engineering",
         }));
-        setEmployees(mappedEmps);
+        
+        const currentUserMock = {
+          id: "current-user",
+          code: "CURR001",
+          first_name: "You",
+          last_name: "(System Admin)",
+          email: "admin@eoms.local",
+          phone: "+91 99999 99999",
+          avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80",
+          designation: "System Admin",
+          department: "Administration",
+        };
+        setEmployees([currentUserMock, ...mappedEmps]);
       } catch (err) {
         console.error("Failed to load attendance data", err);
       } finally {
@@ -132,6 +214,81 @@ export default function EnterpriseAttendancePage() {
           </span>
         </div>
       </div>
+
+      {/* Mark Attendance Interactive Card */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today&apos;s Attendance Action</span>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 font-mono tracking-tight">{time || "00:00:00 AM"}</h2>
+            <p className="text-xs text-slate-400 font-medium">{dateStr || "Loading current date..."}</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4 flex-1 max-w-2xl">
+            <div className="w-full sm:w-44 space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Work Mode</label>
+              <select
+                disabled={isCheckedIn}
+                value={workMode}
+                onChange={(e) => setWorkMode(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 font-semibold focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 disabled:opacity-60 transition-all"
+              >
+                <option value="Office">Office</option>
+                <option value="Field/Site">Field/Site</option>
+                <option value="Remote">Remote</option>
+              </select>
+            </div>
+
+            <div className="w-full flex-1 space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Notes / Remarks</label>
+              <input
+                type="text"
+                disabled={isCheckedIn}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={isCheckedIn ? "Checked in successfully" : "e.g., morning shift, client site..."}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 disabled:opacity-60 transition-all"
+              />
+            </div>
+
+            <div className="w-full sm:w-auto pt-5 sm:pt-0">
+              <button
+                onClick={handleCheckInOut}
+                className={cn(
+                  "w-full sm:w-36 px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all duration-150 transform hover:scale-[1.01] active:scale-[0.99]",
+                  isCheckedIn
+                    ? "bg-red-600 hover:bg-red-700 text-white shadow-red-200"
+                    : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200"
+                )}
+              >
+                {isCheckedIn ? "Check Out" : "Check In"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {checkInTime && (
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-4 text-xs font-semibold text-slate-500">
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Checked In: <b className="text-gray-900">{checkInTime}</b></span>
+            {checkOutTime && <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Checked Out: <b className="text-gray-900">{checkOutTime}</b></span>}
+          </div>
+        )}
+      </div>
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed bottom-5 right-5 bg-slate-900 border border-slate-800 text-white rounded-xl p-4 shadow-2xl flex items-center gap-3 animate-slide-in-up z-50">
+          <UserCheck className="h-5 w-5 text-emerald-400" />
+          <div>
+            <p className="text-xs font-semibold text-slate-400">Success</p>
+            <p className="text-sm font-bold">{toast.message}</p>
+          </div>
+          <button onClick={() => setToast({ ...toast, show: false })} className="text-slate-400 hover:text-white ml-2 text-xs font-bold">✕</button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
