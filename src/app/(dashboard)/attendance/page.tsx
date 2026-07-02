@@ -117,12 +117,16 @@ export default function BulkAttendancePortal() {
 
   // Exporter parameters
   const [exportTarget, setExportTarget] = useState<string>("All Live Personnel Roster");
-  const [exportMonth, setExportMonth] = useState<string>("June");
-  const [exportYear, setExportYear] = useState<string>("2026");
+  const [exportMonths, setExportMonths] = useState<string[]>(["June"]);
+  const [exportYears, setExportYears] = useState<string[]>(["2026"]);
+  const [monthsDropdownOpen, setMonthsDropdownOpen] = useState<boolean>(false);
+  const [yearsDropdownOpen, setYearsDropdownOpen] = useState<boolean>(false);
 
   const handleExportMonthly = () => {
     const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
-    const fileName = `EOMS_GLOBAL_ATTENDANCE_LEDGER_${exportMonth.toUpperCase()}_${exportYear}.xls`;
+    const monthLabel = exportMonths.length === 1 ? exportMonths[0].toUpperCase() : "MULTI_MONTH";
+    const yearLabel = exportYears.length === 1 ? exportYears[0] : "MULTI_YEAR";
+    const fileName = `EOMS_GLOBAL_ATTENDANCE_LEDGER_${monthLabel}_${yearLabel}.xls`;
     
     let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -159,8 +163,15 @@ export default function BulkAttendancePortal() {
     <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
    </Borders>
   </Style>
- </Styles>
- <Worksheet ss:Name="Attendance Ledger">
+ </Styles>`;
+
+    const selectedDayNum = parseInt(selectedDate.split("-")[2]) || 26;
+
+    exportYears.forEach((year) => {
+      exportMonths.forEach((month) => {
+        const sheetName = `${month.substring(0, 3)} ${year}`;
+        xmlContent += `
+ <Worksheet ss:Name="${sheetName}">
   <Table>
    <Column ss:Width="100"/>
    <Column ss:Width="160"/>
@@ -168,101 +179,102 @@ export default function BulkAttendancePortal() {
    <Column ss:Width="45" ss:Span="30"/>
    <Column ss:Width="120" ss:Span="6"/>`;
 
-    xmlContent += '\n   <Row ss:Height="25">';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Full Name</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Department</Data></Cell>';
-    for (let day = 1; day <= 31; day++) {
-      xmlContent += `<Cell ss:StyleID="headerCell"><Data ss:Type="String">Day ${String(day).padStart(2, "0")}</Data></Cell>`;
-    }
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Days Present</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Days Absent</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Half-Days</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total On-Duty</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total OT Hours Added</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Net Payable Days for Payroll</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Compliance Attendance Rate %</Data></Cell>';
-    xmlContent += '</Row>';
-
-    const selectedDayNum = parseInt(selectedDate.split("-")[2]) || 26;
-
-    targets.forEach((w) => {
-      let present = 0;
-      let absent = 0;
-      let halfDay = 0;
-      let onDuty = 0;
-      let totalOt = 0;
-      const dayCodes: string[] = [];
-
-      for (let day = 1; day <= 31; day++) {
-        const dateObj = new Date(parseInt(exportYear), ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(exportMonth), day);
-        const dayOfWeek = dateObj.getDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-        if (day === selectedDayNum) {
-          const code = {
-            "Present": "P",
-            "Absent": "A",
-            "Half-Day": "HD",
-            "On Duty": "OD"
-          }[w.status];
-          dayCodes.push(code);
-          if (w.status === "Present") present++;
-          else if (w.status === "Absent") absent++;
-          else if (w.status === "Half-Day") halfDay++;
-          else if (w.status === "On Duty") onDuty++;
-          totalOt += w.overtime || 0;
-        } else if (isWeekend) {
-          dayCodes.push("OFF");
-        } else {
-          const rand = (parseInt(w.id.replace(/\D/g, "")) || 1) * day;
-          const mod = rand % 20;
-          if (mod === 0) {
-            dayCodes.push("A");
-            absent++;
-          } else if (mod === 1) {
-            dayCodes.push("HD");
-            halfDay++;
-            totalOt += 1.0;
-          } else if (mod === 2) {
-            dayCodes.push("OD");
-            onDuty++;
-          } else {
-            dayCodes.push("P");
-            present++;
-            if (rand % 15 === 0) totalOt += 2.0;
-          }
+        xmlContent += '\n   <Row ss:Height="25">';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Full Name</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Department</Data></Cell>';
+        for (let day = 1; day <= 31; day++) {
+          xmlContent += `<Cell ss:StyleID="headerCell"><Data ss:Type="String">Day ${String(day).padStart(2, "0")}</Data></Cell>`;
         }
-      }
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Days Present</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Days Absent</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Half-Days</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total On-Duty</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total OT Hours Added</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Net Payable Days for Payroll</Data></Cell>';
+        xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Compliance Attendance Rate %</Data></Cell>';
+        xmlContent += '</Row>';
 
-      const netPayable = present + onDuty + (halfDay * 0.5);
-      const totalRosterDays = present + absent + halfDay + onDuty;
-      const rate = totalRosterDays > 0 ? Math.round((netPayable / totalRosterDays) * 100) : 0;
+        targets.forEach((w) => {
+          let present = 0;
+          let absent = 0;
+          let halfDay = 0;
+          let onDuty = 0;
+          let totalOt = 0;
+          const dayCodes: string[] = [];
 
-      const safeName = w.name || "-";
-      const safeDept = w.department || "-";
+          for (let day = 1; day <= 31; day++) {
+            const dateObj = new Date(parseInt(year), ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(month), day);
+            const dayOfWeek = dateObj.getDay();
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-      xmlContent += '\n   <Row ss:Height="20">';
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeName}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeDept}</Data></Cell>`;
-      dayCodes.forEach((code) => {
-        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${code}</Data></Cell>`;
+            if (day === selectedDayNum) {
+              const code = {
+                "Present": "P",
+                "Absent": "A",
+                "Half-Day": "HD",
+                "On Duty": "OD"
+              }[w.status];
+              dayCodes.push(code);
+              if (w.status === "Present") present++;
+              else if (w.status === "Absent") absent++;
+              else if (w.status === "Half-Day") halfDay++;
+              else if (w.status === "On Duty") onDuty++;
+              totalOt += w.overtime || 0;
+            } else if (isWeekend) {
+              dayCodes.push("OFF");
+            } else {
+              const rand = (parseInt(w.id.replace(/\D/g, "")) || 1) * day;
+              const mod = rand % 20;
+              if (mod === 0) {
+                dayCodes.push("A");
+                absent++;
+              } else if (mod === 1) {
+                dayCodes.push("HD");
+                halfDay++;
+                totalOt += 1.0;
+              } else if (mod === 2) {
+                dayCodes.push("OD");
+                onDuty++;
+              } else {
+                dayCodes.push("P");
+                present++;
+                if (rand % 15 === 0) totalOt += 2.0;
+              }
+            }
+          }
+
+          const netPayable = present + onDuty + (halfDay * 0.5);
+          const totalRosterDays = present + absent + halfDay + onDuty;
+          const rate = totalRosterDays > 0 ? Math.round((netPayable / totalRosterDays) * 100) : 0;
+
+          const safeName = w.name || "-";
+          const safeDept = w.department || "-";
+
+          xmlContent += '\n   <Row ss:Height="20">';
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeName}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeDept}</Data></Cell>`;
+          dayCodes.forEach((code) => {
+            xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${code}</Data></Cell>`;
+          });
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${present}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${absent}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${halfDay}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${onDuty}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${totalOt.toFixed(1)}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${netPayable.toFixed(1)}</Data></Cell>`;
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${rate}%</Data></Cell>`;
+          xmlContent += '</Row>';
+        });
+
+        xmlContent += `
+  </Table>
+ </Worksheet>`;
       });
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${present}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${absent}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${halfDay}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${onDuty}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${totalOt.toFixed(1)}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${netPayable.toFixed(1)}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${rate}%</Data></Cell>`;
-      xmlContent += '</Row>';
     });
 
-    xmlContent += `
-  </Table>
- </Worksheet>
-</Workbook>`;
+    xmlContent += `\n</Workbook>`;
 
     const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -284,7 +296,8 @@ export default function BulkAttendancePortal() {
 
   const handleExportYearly = () => {
     const targets = exportTarget === "All Live Personnel Roster" ? workers : filteredWorkers;
-    const fileName = `EOMS_GLOBAL_ATTENDANCE_YEARLY_SUMMARY_${exportYear}.xls`;
+    const yearLabel = exportYears.length === 1 ? exportYears[0] : "MULTI_YEAR";
+    const fileName = `EOMS_GLOBAL_ATTENDANCE_YEARLY_SUMMARY_${yearLabel}.xls`;
     
     let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -321,8 +334,11 @@ export default function BulkAttendancePortal() {
     <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
    </Borders>
   </Style>
- </Styles>
- <Worksheet ss:Name="Yearly Summary">
+ </Styles>`;
+
+    exportYears.forEach((year) => {
+      xmlContent += `
+ <Worksheet ss:Name="Summary ${year}">
   <Table>
    <Column ss:Width="100"/>
    <Column ss:Width="160"/>
@@ -330,61 +346,63 @@ export default function BulkAttendancePortal() {
    <Column ss:Width="65" ss:Span="11"/>
    <Column ss:Width="120" ss:Span="3"/>`;
 
-    xmlContent += '\n   <Row ss:Height="25">';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Full Name</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Department</Data></Cell>';
-    ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].forEach(month => {
-      xmlContent += `<Cell ss:StyleID="headerCell"><Data ss:Type="String">${month}</Data></Cell>`;
-    });
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Present</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Absent</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total OT Hours</Data></Cell>';
-    xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Compliance Rate</Data></Cell>';
-    xmlContent += '</Row>';
-
-    targets.forEach((w) => {
-      let annualPresent = 0;
-      let annualAbsent = 0;
-      let annualOt = 0;
-      const monthlyData: string[] = [];
-
-      for (let m = 0; m < 12; m++) {
-        const rand = (parseInt(w.id.replace(/\D/g, "")) || 1) * (m + 1);
-        const presentDays = 20 + (rand % 3) - (rand % 2 === 0 ? 1 : 0);
-        const absentDays = 22 - presentDays;
-        const otHours = w.overtime ? w.overtime * (1 + (m % 3)) : (rand % 5 === 0 ? 4 : 0);
-
-        annualPresent += presentDays;
-        annualAbsent += absentDays;
-        annualOt += otHours;
-
-        monthlyData.push(`${presentDays}P/${absentDays}A`);
-      }
-
-      const totalActive = annualPresent + annualAbsent;
-      const rate = totalActive > 0 ? Math.round((annualPresent / totalActive) * 100) : 0;
-      const safeName = w.name || "-";
-      const safeDept = w.department || "-";
-
-      xmlContent += '\n   <Row ss:Height="20">';
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeName}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeDept}</Data></Cell>`;
-      monthlyData.forEach((item) => {
-        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${item}</Data></Cell>`;
+      xmlContent += '\n   <Row ss:Height="25">';
+      xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Employee Code</Data></Cell>';
+      xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Full Name</Data></Cell>';
+      xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Department</Data></Cell>';
+      ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].forEach(month => {
+        xmlContent += `<Cell ss:StyleID="headerCell"><Data ss:Type="String">${month}</Data></Cell>`;
       });
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualPresent}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualAbsent}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualOt.toFixed(1)}</Data></Cell>`;
-      xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${rate}%</Data></Cell>`;
+      xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Present</Data></Cell>';
+      xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total Absent</Data></Cell>';
+      xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Total OT Hours</Data></Cell>';
+      xmlContent += '<Cell ss:StyleID="headerCell"><Data ss:Type="String">Compliance Rate</Data></Cell>';
       xmlContent += '</Row>';
+
+      targets.forEach((w) => {
+        let annualPresent = 0;
+        let annualAbsent = 0;
+        let annualOt = 0;
+        const monthlyData: string[] = [];
+
+        for (let m = 0; m < 12; m++) {
+          const rand = (parseInt(w.id.replace(/\D/g, "")) || 1) * (m + 1);
+          const presentDays = 20 + (rand % 3) - (rand % 2 === 0 ? 1 : 0);
+          const absentDays = 22 - presentDays;
+          const otHours = w.overtime ? w.overtime * (1 + (m % 3)) : (rand % 5 === 0 ? 4 : 0);
+
+          annualPresent += presentDays;
+          annualAbsent += absentDays;
+          annualOt += otHours;
+
+          monthlyData.push(`${presentDays}P/${absentDays}A`);
+        }
+
+        const totalActive = annualPresent + annualAbsent;
+        const rate = totalActive > 0 ? Math.round((annualPresent / totalActive) * 100) : 0;
+        const safeName = w.name || "-";
+        const safeDept = w.department || "-";
+
+        xmlContent += '\n   <Row ss:Height="20">';
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${w.code}</Data></Cell>`;
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeName}</Data></Cell>`;
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${safeDept}</Data></Cell>`;
+        monthlyData.forEach((item) => {
+          xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${item}</Data></Cell>`;
+        });
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualPresent}</Data></Cell>`;
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualAbsent}</Data></Cell>`;
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="Number">${annualOt.toFixed(1)}</Data></Cell>`;
+        xmlContent += `<Cell ss:StyleID="corporateCell"><Data ss:Type="String">${rate}%</Data></Cell>`;
+        xmlContent += '</Row>';
+      });
+
+      xmlContent += `
+  </Table>
+ </Worksheet>`;
     });
 
-    xmlContent += `
-  </Table>
- </Worksheet>
-</Workbook>`;
+    xmlContent += `\n</Workbook>`;
 
     const blob = new Blob([xmlContent], { type: "application/vnd.ms-excel;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -611,32 +629,88 @@ export default function BulkAttendancePortal() {
               </select>
             </div>
 
-            {/* Target Month */}
-            <div className="space-y-1.5 col-span-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Target Month</label>
-              <select
-                value={exportMonth}
-                onChange={(e) => setExportMonth(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
+            {/* Target Month(s) */}
+            <div className="space-y-1.5 col-span-1 relative">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Target Month(s)</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setMonthsDropdownOpen(!monthsDropdownOpen);
+                  setYearsDropdownOpen(false);
+                }}
+                className="w-full px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 flex justify-between items-center h-8"
               >
-                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+                <span>{exportMonths.length === 1 ? exportMonths[0] : `${exportMonths.length} Selected`}</span>
+                <span className="text-[10px] text-slate-400">▼</span>
+              </button>
+              {monthsDropdownOpen && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto space-y-1">
+                  {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => {
+                    const checked = exportMonths.includes(m);
+                    return (
+                      <label key={m} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 rounded text-xs font-medium text-slate-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            if (checked) {
+                              if (exportMonths.length > 1) {
+                                setExportMonths(exportMonths.filter(x => x !== m));
+                              }
+                            } else {
+                              setExportMonths([...exportMonths, m]);
+                            }
+                          }}
+                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        {m}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Target Year */}
-            <div className="space-y-1.5 col-span-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Target Year</label>
-              <select
-                value={exportYear}
-                onChange={(e) => setExportYear(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
+            {/* Target Year(s) */}
+            <div className="space-y-1.5 col-span-1 relative">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Target Year(s)</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setYearsDropdownOpen(!yearsDropdownOpen);
+                  setMonthsDropdownOpen(false);
+                }}
+                className="w-full px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 flex justify-between items-center h-8"
               >
-                {["2024", "2025", "2026", "2027"].map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+                <span>{exportYears.length === 1 ? exportYears[0] : `${exportYears.length} Selected`}</span>
+                <span className="text-[10px] text-slate-400">▼</span>
+              </button>
+              {yearsDropdownOpen && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto space-y-1">
+                  {["2024", "2025", "2026", "2027"].map(y => {
+                    const checked = exportYears.includes(y);
+                    return (
+                      <label key={y} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 rounded text-xs font-medium text-slate-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            if (checked) {
+                              if (exportYears.length > 1) {
+                                setExportYears(exportYears.filter(x => x !== y));
+                              }
+                            } else {
+                              setExportYears([...exportYears, y]);
+                            }
+                          }}
+                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        {y}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Buttons Group */}
