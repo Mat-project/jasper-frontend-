@@ -8,7 +8,7 @@ export interface Document {
   remarks: string;
   uploaded_by: string;
   uploaded_at: string;
-  status: "Pending" | "Approved" | "Rejected";
+  status: "Draft" | "Under Review" | "Approved" | "Rejected" | "Archived";
   approved_by?: string;
   approved_at?: string;
   remarks_approver?: string;

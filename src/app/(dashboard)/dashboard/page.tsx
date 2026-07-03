@@ -18,6 +18,25 @@ export default function DashboardPage() {
     return user?.roles.some(r => r.name.toLowerCase() === roleName.toLowerCase()) || false;
   };
 
+  const isAdminRole = () => {
+    return (
+      hasRole("System Admin") ||
+      hasRole("Managing Director") ||
+      hasRole("Operations Manager") ||
+      hasRole("Technical Manager") ||
+      hasRole("Admin")
+    );
+  };
+
+  const isManagerRole = () => {
+    return (
+      hasRole("Project Manager") ||
+      hasRole("Section Manager") ||
+      hasRole("Assistant Section Manager") ||
+      hasRole("Manager")
+    );
+  };
+
   useEffect(() => {
     if (!user) return;
 
@@ -26,9 +45,9 @@ export default function DashboardPage() {
       setError(null);
       try {
         let data;
-        if (hasRole("Admin")) {
+        if (isAdminRole()) {
           data = await getAdminDashboard();
-        } else if (hasRole("Manager")) {
+        } else if (isManagerRole()) {
           data = await getManagerDashboard();
         } else {
           data = await getEmployeeDashboard();
@@ -65,7 +84,7 @@ export default function DashboardPage() {
   }
 
   // Render Admin Dashboard
-  if (hasRole("Admin") && dashboardData) {
+  if (isAdminRole() && dashboardData) {
     const { kpis, production_summary, billing_summary, charts } = dashboardData;
     return (
       <div className="space-y-6">
@@ -183,7 +202,7 @@ export default function DashboardPage() {
   }
 
   // Render Manager Dashboard
-  if (hasRole("Manager") && dashboardData) {
+  if (isManagerRole() && dashboardData) {
     const { kpis, team_attendance_summary } = dashboardData;
     return (
       <div className="space-y-6">

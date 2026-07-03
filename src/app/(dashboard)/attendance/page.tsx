@@ -14,6 +14,7 @@ import {
   FileDown,
 } from "lucide-react";
 import { getEmployees } from "@/lib/api/employees";
+import { getAttendance, bulkSaveAttendance } from "@/lib/api/attendance";
 import { cn } from "@/lib/utils";
 
 interface WorkerRecord {
@@ -436,21 +437,33 @@ export default function BulkAttendancePortal() {
   }, [workers]);
 
   const syncRoster = useCallback(async (showToast: boolean = false) => {
+    if (!selectedDate) return;
     try {
       setLoading(true);
-      const empData = await getEmployees();
+      const [empData, attendanceData] = await Promise.all([
+        getEmployees(),
+        getAttendance({ date: selectedDate }),
+      ]);
+      
+      const attendanceMap = new Map<string, any>();
+      attendanceData.forEach((rec: any) => {
+        attendanceMap.set(String(rec.employee_id), rec);
+      });
+
       const mapped = empData.map((emp: any) => {
         const first = emp.first_name || "";
         const last = emp.last_name || "";
         const fullName = `${first} ${last}`.trim();
+        const existingRecord = attendanceMap.get(String(emp.id));
+
         return {
           id: emp.id,
           code: emp.employee_code || emp.id.substring(0, 8) || "-",
           name: fullName || "-",
           department: emp.department || "-",
-          status: "Present" as const,
-          overtime: 0,
-          remarks: "",
+          status: existingRecord ? (existingRecord.status === "Half Day" ? "Half-Day" : existingRecord.status) as any : "Present",
+          overtime: existingRecord ? parseFloat(existingRecord.overtime_hours) || 0 : 0,
+          remarks: existingRecord ? existingRecord.remarks || "" : "",
         };
       });
       setWorkers(mapped);
@@ -472,13 +485,18 @@ export default function BulkAttendancePortal() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
     setSelectedDate(today);
-    syncRoster(false);
-  }, [syncRoster]);
+  }, []);
+
+  useEffect(() => {
+    if (selectedDate) {
+      syncRoster(false);
+    }
+  }, [selectedDate, syncRoster]);
 
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
@@ -528,18 +546,33 @@ export default function BulkAttendancePortal() {
     setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
   };
 
-  const handleSaveSheet = () => {
-    console.log("=== SAVING ATTENDANCE SHEET ===");
-    console.log("Date:", selectedDate);
-    console.log("Total Records:", workers.length);
-    console.log("Payload:", workers);
-    console.log("================================");
+  const handleSaveSheet = async () => {
+    try {
+      setLoading(true);
+      const recordsPayload = workers.map((w) => ({
+        employee_id: w.id,
+        status: w.status,
+        overtime_hours: w.overtime,
+        remarks: w.remarks,
+      }));
 
-    setToast({
-      message: `Saved attendance sheet for ${workers.length} workers successfully!`,
-      show: true,
-    });
-    setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+      await bulkSaveAttendance(selectedDate, recordsPayload);
+
+      setToast({
+        message: `Saved attendance sheet for ${workers.length} workers successfully!`,
+        show: true,
+      });
+      setTimeout(() => setToast((t) => ({ ...t, show: false })), 4000);
+    } catch (err) {
+      console.error("Failed to save attendance:", err);
+      setToast({
+        message: "Failed to save attendance sheet to database.",
+        show: true,
+      });
+      setTimeout(() => setToast((t) => ({ ...t, show: false })), 4500);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const stats = useMemo(() => {

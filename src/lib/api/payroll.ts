@@ -1,5 +1,30 @@
 import apiClient from "./client";
-import type { EnterpriseSalaryStructure, EnterprisePayslip } from "@/data/mockEnterpriseData";
+
+export interface EnterpriseSalaryStructure {
+  id: string;
+  employee_id: string;
+  basic_salary: number;
+  hra: number;
+  special_allowance: number;
+  conveyance_allowance: number;
+  pf_deduction: number;
+  esi_deduction: number;
+  tds_tax_deduction: number;
+  overtime_hourly_rate: number;
+}
+
+export interface EnterprisePayslip {
+  id: string;
+  employee_id: string;
+  period: string;
+  gross_earnings: number;
+  gross_deductions: number;
+  net_salary: number;
+  overtime_pay: number;
+  bonus: number;
+  status: "Processing" | "Paid" | "Failed";
+  paid_date: string | null;
+}
 
 interface PaginatedResponse<T> {
   count: number;

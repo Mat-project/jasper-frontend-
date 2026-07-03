@@ -67,32 +67,14 @@ export async function getVersions(documentId: string): Promise<VersionHistory[]>
 // ── Document Approval Workflow ──────────────────────────────────────────────
 
 export async function approveDocument(id: string, comments: string = "Approved"): Promise<any> {
-  // Find the approval record for the document first
-  const approvalsResponse = await apiClient.get<PaginatedResponse<any>>("/api/v1/documents/approvals/", {
-    params: { page_size: 100 },
-  });
-  const approval = approvalsResponse.data.results.find(
-    (a) => a.document === id && a.approval_status === "Pending"
-  );
-  
-  const approvalId = approval ? approval.id : id;
-  const response = await apiClient.post(`/api/v1/documents/approvals/${approvalId}/approve/`, {
+  const response = await apiClient.post(`/api/v1/documents/documents/${id}/approve/`, {
     comments,
   });
   return response.data;
 }
 
 export async function rejectDocument(id: string, comments: string): Promise<any> {
-  // Find the approval record for the document first
-  const approvalsResponse = await apiClient.get<PaginatedResponse<any>>("/api/v1/documents/approvals/", {
-    params: { page_size: 100 },
-  });
-  const approval = approvalsResponse.data.results.find(
-    (a) => a.document === id && a.approval_status === "Pending"
-  );
-  
-  const approvalId = approval ? approval.id : id;
-  const response = await apiClient.post(`/api/v1/documents/approvals/${approvalId}/reject/`, {
+  const response = await apiClient.post(`/api/v1/documents/documents/${id}/reject/`, {
     comments,
   });
   return response.data;

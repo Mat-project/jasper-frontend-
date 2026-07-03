@@ -32,7 +32,7 @@ export default function DocumentsPage() {
   const [selectedProj, setSelectedProj] = useState("all");
 
   // Approval tabs
-  const [approvalTab, setApprovalTab] = useState<Document["status"]>("Pending");
+  const [approvalTab, setApprovalTab] = useState<Document["status"]>("Under Review");
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -113,7 +113,7 @@ export default function DocumentsPage() {
     }
     try {
       const formData = new FormData();
-      formData.append("project", form.project_id);
+      formData.append("project_id", form.project_id);
       formData.append("document_number", `DOC-${form.file_name.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${Date.now().toString().slice(-4)}`);
       formData.append("title", form.file_name);
       formData.append("description", form.remarks);
@@ -237,7 +237,7 @@ export default function DocumentsPage() {
         <div className="flex items-center gap-3">
           {activeTab === "approvals" && (
             <div className="flex gap-1 p-1 bg-slate-500/5 rounded-lg border border-border">
-              {(["Pending", "Approved", "Rejected"] as const).map((tab) => (
+              {(["Under Review", "Approved", "Rejected"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setApprovalTab(tab)}
@@ -339,7 +339,7 @@ export default function DocumentsPage() {
                       >
                         <History className="h-4 w-4" />
                       </button>
-                      {activeTab === "approvals" && approvalTab === "Pending" && (
+                      {activeTab === "approvals" && approvalTab === "Under Review" && (
                         <>
                           <button
                             onClick={() => handleApproveDoc(doc.id)}

@@ -14,8 +14,12 @@ import {
 import {
   EnterpriseSalaryStructure,
   EnterprisePayslip,
-} from "@/data/mockEnterpriseData";
-import { getPayslips, getSalaryStructures, generatePayslips } from "@/lib/api/payroll";
+  getPayslips,
+  getSalaryStructures,
+  generatePayslips,
+  createSalaryStructure,
+  updateSalaryStructure,
+} from "@/lib/api/payroll";
 import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +28,12 @@ export default function EnterprisePayrollPage() {
   const [salaryStructures, setSalaryStructures] = useState<EnterpriseSalaryStructure[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modals
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [generatePeriod, setGeneratePeriod] = useState("July 2026");
+  const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
+  const [editingStructure, setEditingStructure] = useState<EnterpriseSalaryStructure | null>(null);
 
   React.useEffect(() => {
     async function loadData() {
@@ -59,10 +69,43 @@ export default function EnterprisePayrollPage() {
 
   const handleGeneratePayslips = async () => {
     try {
-      const generated = await generatePayslips("June 2026");
-      setPayslips(generated);
+      const generated = await generatePayslips(generatePeriod);
+      // We re-fetch payslips to merge properly
+      const newPayslips = await getPayslips();
+      setPayslips(newPayslips);
+      setIsGenerateModalOpen(false);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleSaveStructure = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const data: any = {
+      employee_id: formData.get("employee_id"),
+      basic_salary: Number(formData.get("basic_salary")),
+      hra: Number(formData.get("hra")),
+      special_allowance: Number(formData.get("special_allowance")),
+      conveyance_allowance: Number(formData.get("conveyance_allowance")),
+      pf_deduction: Number(formData.get("pf_deduction")),
+      esi_deduction: Number(formData.get("esi_deduction")),
+      tds_tax_deduction: Number(formData.get("tds_tax_deduction")),
+      overtime_hourly_rate: Number(formData.get("overtime_hourly_rate")),
+    };
+
+    try {
+      if (editingStructure) {
+        await updateSalaryStructure(editingStructure.id, data);
+      } else {
+        await createSalaryStructure(data);
+      }
+      const newStructs = await getSalaryStructures();
+      setSalaryStructures(newStructs);
+      setIsStructureModalOpen(false);
+      setEditingStructure(null);
+    } catch (err) {
+      console.error("Failed to save structure", err);
     }
   };
 
@@ -106,11 +149,8 @@ export default function EnterprisePayrollPage() {
           <p className="text-sm text-slate-500 mt-1">Manage compensation, generate payslips, and track statutory deductions.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-slate-600 shadow-sm">
-            Pay Period: June 2026
-          </span>
           <button
-            onClick={handleGeneratePayslips}
+            onClick={() => setIsGenerateModalOpen(true)}
             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
           >
             Generate Payslips
@@ -238,9 +278,21 @@ export default function EnterprisePayrollPage() {
 
         {/* SALARY STRUCTURES TAB */}
         {activeTab === "structures" && (
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {salaryStructures.map((ss) => {
-              const emp = employees.find((e) => e.id === ss.employee_id);
+          <div className="p-4 space-y-4">
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  setEditingStructure(null);
+                  setIsStructureModalOpen(true);
+                }}
+                className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+              >
+                + Add Structure
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {salaryStructures.map((ss) => {
+                const emp = employees.find((e) => e.id === ss.employee_id);
               if (!emp) return null;
               const totalEarnings = ss.basic_salary + ss.hra + ss.special_allowance + ss.conveyance_allowance;
               const totalDeds = ss.pf_deduction + ss.esi_deduction + ss.tds_tax_deduction;
@@ -314,9 +366,22 @@ export default function EnterprisePayrollPage() {
                     <span>Overtime Hourly Rate</span>
                     <span className="font-bold text-gray-700">{formatCurrency(ss.overtime_hourly_rate)}/hr</span>
                   </div>
+                  {/* Actions */}
+                  <div className="px-5 py-2 bg-gray-50 border-t border-gray-100 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setEditingStructure(ss);
+                        setIsStructureModalOpen(true);
+                      }}
+                      className="px-3 py-1 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-100 transition-colors"
+                    >
+                      Edit Structure
+                    </button>
+                  </div>
                 </div>
               );
             })}
+          </div>
           </div>
         )}
 
@@ -449,6 +514,126 @@ export default function EnterprisePayrollPage() {
           );
         })()}
       </div>
+
+      {/* GENERATE PAYSLIPS MODAL */}
+      {isGenerateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Generate Payslips</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Pay Period (e.g. July 2026)</label>
+                <input
+                  type="text"
+                  value={generatePeriod}
+                  onChange={(e) => setGeneratePeriod(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsGenerateModalOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleGeneratePayslips}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SALARY STRUCTURE MODAL */}
+      {isStructureModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">
+                {editingStructure ? "Edit Salary Structure" : "Add Salary Structure"}
+              </h3>
+            </div>
+            <form onSubmit={handleSaveStructure}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Employee</label>
+                  <select
+                    name="employee_id"
+                    defaultValue={editingStructure?.employee_id || ""}
+                    disabled={!!editingStructure}
+                    required
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    <option value="" disabled>Select Employee</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name} ({emp.code})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Basic Salary</label>
+                    <input type="number" name="basic_salary" defaultValue={editingStructure?.basic_salary || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">HRA</label>
+                    <input type="number" name="hra" defaultValue={editingStructure?.hra || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Special Allowance</label>
+                    <input type="number" name="special_allowance" defaultValue={editingStructure?.special_allowance || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Conveyance Allowance</label>
+                    <input type="number" name="conveyance_allowance" defaultValue={editingStructure?.conveyance_allowance || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">PF Deduction</label>
+                    <input type="number" name="pf_deduction" defaultValue={editingStructure?.pf_deduction || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">ESI Deduction</label>
+                    <input type="number" name="esi_deduction" defaultValue={editingStructure?.esi_deduction || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">TDS Tax Deduction</label>
+                    <input type="number" name="tds_tax_deduction" defaultValue={editingStructure?.tds_tax_deduction || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Overtime Hourly Rate</label>
+                    <input type="number" name="overtime_hourly_rate" defaultValue={editingStructure?.overtime_hourly_rate || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsStructureModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
+                >
+                  Save Structure
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

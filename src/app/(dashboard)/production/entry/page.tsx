@@ -64,10 +64,10 @@ export default function ProductionEntryPage() {
     setNotification(null);
 
     // Validation
-    if (!form.date || !form.employee_id || !form.project_id || !form.drawing_category_id || form.quantity <= 0) {
+    if (!form.date || !form.employee_id || !form.project_id || !form.drawing_category_id || form.quantity <= 0 || form.tonnage <= 0) {
       setNotification({
         type: "error",
-        message: "Please fill in all required fields and ensure quantity is greater than 0.",
+        message: "Please fill in all required fields and ensure both quantity and tonnage are greater than 0.",
       });
       return;
     }
@@ -92,9 +92,13 @@ export default function ProductionEntryPage() {
         remarks: "",
       }));
     } catch (err: any) {
+      const apiError = err.response?.data?.error?.message;
+      const apiDetails = err.response?.data?.error?.details;
+      const detailStr = apiDetails ? JSON.stringify(apiDetails) : "";
+      
       setNotification({
         type: "error",
-        message: err.response?.data?.rejection_reason || err.message || "Failed to log production entry.",
+        message: apiError ? `${apiError} ${detailStr}` : (err.response?.data?.rejection_reason || err.message || "Failed to log production entry."),
       });
     }
   };

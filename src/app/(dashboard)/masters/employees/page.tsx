@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getEmployees, createEmployee, updateEmployee, toggleEmployeeStatus } from "@/lib/api/employees";
+import apiClient from "@/lib/api/client";
 import { getDepartments, getSections, getRoles } from "@/lib/api/masters";
 import { Dialog } from "@/components/layout/Dialog";
 import { User } from "@/types/user";
@@ -13,13 +14,14 @@ type EmployeeRecord = User & { employee_code?: string; department?: string; sect
 
 const emptyForm = {
   employee_code: "", first_name: "", last_name: "", email: "",
-  phone_number: "", department: "", section: "", role: "",
+  phone_number: "", department: "", section: "", team: "", role: "",
 };
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,13 +43,20 @@ export default function EmployeesPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [emps, depts, secs, rls] = await Promise.all([
-        getEmployees(), getDepartments(), getSections(), getRoles(),
+      const [emps, depts, secs, rls, tms] = await Promise.all([
+        getEmployees(), 
+        getDepartments(), 
+        getSections(), 
+        getRoles(),
+        apiClient.get("/api/v1/masters/teams/").then(res => res.data)
       ]);
       setEmployees(emps as EmployeeRecord[]);
       setDepartments(depts);
       setSections(secs);
       setRoles(rls);
+      setTeams(tms.results || tms);
+    } catch (error) {
+      console.error("Failed to load employee dependencies:", error);
     } finally {
       setIsLoading(false);
     }
@@ -63,7 +72,7 @@ export default function EmployeesPage() {
   };
 
   const handleOpenAdd = () => {
-    setForm({ ...emptyForm, department: departments[0]?.name || "", section: sections[0]?.name || "", role: roles[0]?.name || "" });
+    setForm({ ...emptyForm, department: departments[0]?.name || "", section: sections[0]?.name || "", team: teams[0]?.name || "", role: roles[0]?.name || "" });
     setFormError(null);
     setIsAddOpen(true);
   };
@@ -78,6 +87,7 @@ export default function EmployeesPage() {
       phone_number: emp.phone_number || "",
       department: emp.department || departments[0]?.name || "",
       section: emp.section || sections[0]?.name || "",
+      team: (emp as any).team || teams[0]?.name || "",
       role: emp.roles[0]?.name || roles[0]?.name || "",
     });
     setFormError(null);
@@ -157,17 +167,26 @@ export default function EmployeesPage() {
         <label className="text-xs font-semibold text-muted-foreground">Email Address *</label>
         <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@company.com" className="w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring" required />
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-muted-foreground">Department</label>
           <select value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="w-full px-2 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none">
+            <option value="">None</option>
             {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
           </select>
         </div>
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-muted-foreground">Section</label>
           <select value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} className="w-full px-2 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none">
+            <option value="">None</option>
             {sections.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">Team</label>
+          <select value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })} className="w-full px-2 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none">
+            <option value="">None</option>
+            {teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
         </div>
         <div className="space-y-1.5">

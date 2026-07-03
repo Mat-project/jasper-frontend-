@@ -10,15 +10,23 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-export async function getAttendance(): Promise<EnterpriseAttendance[]> {
+export async function getAttendance(params: Record<string, any> = {}): Promise<EnterpriseAttendance[]> {
   const res = await apiClient.get<PaginatedResponse<EnterpriseAttendance>>("/api/v1/attendance/records/", {
-    params: { page_size: 100 },
+    params: { page_size: 100, ...params },
   });
   return res.data.results;
 }
 
 export async function createAttendance(data: Partial<EnterpriseAttendance>): Promise<EnterpriseAttendance> {
   const res = await apiClient.post<EnterpriseAttendance>("/api/v1/attendance/records/", data);
+  return res.data;
+}
+
+export async function bulkSaveAttendance(date: string, records: any[]): Promise<any> {
+  const res = await apiClient.post("/api/v1/attendance/records/bulk_save/", {
+    date,
+    records,
+  });
   return res.data;
 }
 

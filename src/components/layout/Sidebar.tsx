@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth/context";
 import {
   LayoutDashboard,
   Database,
@@ -44,6 +45,9 @@ interface NavItem {
 }
 
 export function Sidebar() {
+  const { user } = useAuth();
+  const roleName = user?.roles?.[0]?.name || "Viewer";
+
   const [collapsed, setCollapsed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     Masters: true,
@@ -60,7 +64,7 @@ export function Sidebar() {
     }));
   };
 
-  const navItems: NavItem[] = [
+  const allNavItems: NavItem[] = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     {
       label: "Masters",
@@ -98,6 +102,47 @@ export function Sidebar() {
     },
   ];
 
+  const navItems = allNavItems.filter((item) => {
+    const hasRoleIn = (rolesList: string[]) => rolesList.some(r => r.toLowerCase() === roleName.toLowerCase());
+
+    const isGlobal = hasRoleIn(["System Admin", "Managing Director", "Operations Manager", "Technical Manager", "Document Controller", "Admin"]);
+    const isManager = hasRoleIn(["Project Manager", "Section Manager", "Assistant Section Manager", "Manager", "HR"]);
+    const isEmployee = hasRoleIn(["Draftsman", "Checker", "Data Entry Operator"]);
+
+    // 1. Global Admin and Executives see everything
+    if (isGlobal) return true;
+
+    // 2. Managers see specific modules, but restricted in Masters and no Administration
+    if (isManager) {
+      const allowedManager = ["Dashboard", "Masters", "Projects", "Attendance", "Payroll", "Production", "Documents", "Revisions", "Reports"];
+      if (!allowedManager.includes(item.label)) return false;
+      
+      // Filter Masters subItems to only show Employees
+      if (item.label === "Masters" && item.subItems) {
+        item.subItems = item.subItems.filter(sub => sub.label === "Employees");
+      }
+      return true;
+    }
+
+    // 3. Employees see production and basic tracking
+    if (isEmployee) {
+      const allowedEmployee = ["Dashboard", "Attendance", "Production", "Documents", "Revisions"];
+      if (!allowedEmployee.includes(item.label)) return false;
+
+      // Filter Production subItems: Checkers see Entry, Approval, and History. Draftsmen see only Entry and History.
+      if (item.label === "Production" && item.subItems) {
+        if (hasRoleIn(["Checker"])) {
+          item.subItems = item.subItems.filter(sub => ["Production Entry", "Production Approval", "Production History"].includes(sub.label));
+        } else {
+          item.subItems = item.subItems.filter(sub => ["Production Entry", "Production History"].includes(sub.label));
+        }
+      }
+      return true;
+    }
+
+    return false;
+  });
+
   return (
     <aside
       className={cn(
@@ -112,7 +157,7 @@ export function Sidebar() {
         </div>
         {!collapsed && (
           <span className="ml-3 font-bold text-white text-sm tracking-wider uppercase">
-            EOMS Portal
+            EOMS ({roleName})
           </span>
         )}
       </div>
