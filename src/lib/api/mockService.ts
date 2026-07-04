@@ -258,7 +258,7 @@ const initialDB: MockDatabase = {
       remarks: "Revised piping routing",
       uploaded_by: "John Doe",
       uploaded_at: "2026-06-27T13:00:00Z",
-      status: "Pending"
+      status: "Under Review"
     }
   ],
   versionHistories: [
@@ -747,30 +747,32 @@ export const mockService = {
     const db = getDB();
     
     // Check if the document already exists for this project and file_name
-    let doc = db.documents.find((d) => d.project_id === data.project_id && d.file_name === data.file_name);
+    const existingDoc = db.documents.find((d) => d.project_id === data.project_id && d.file_name === data.file_name);
+    let finalDoc: Document;
     
-    if (doc) {
+    if (existingDoc) {
       // Create version history entry for the OLD version
       const oldVer: VersionHistory = {
         id: `ver-${Date.now()}`,
-        document_id: doc.id,
-        version: doc.version,
-        file_name: doc.file_name,
-        remarks: doc.remarks,
-        uploaded_by: doc.uploaded_by,
-        uploaded_at: doc.uploaded_at
+        document_id: existingDoc.id,
+        version: existingDoc.version,
+        file_name: existingDoc.file_name,
+        remarks: existingDoc.remarks,
+        uploaded_by: existingDoc.uploaded_by,
+        uploaded_at: existingDoc.uploaded_at
       };
       db.versionHistories.push(oldVer);
 
       // Update the document to the new version
-      doc.version = data.version;
-      doc.remarks = data.remarks;
-      doc.uploaded_by = data.uploaded_by;
-      doc.uploaded_at = new Date().toISOString();
-      doc.status = "Pending";
+      existingDoc.version = data.version;
+      existingDoc.remarks = data.remarks;
+      existingDoc.uploaded_by = data.uploaded_by;
+      existingDoc.uploaded_at = new Date().toISOString();
+      existingDoc.status = "Under Review";
+      finalDoc = existingDoc;
     } else {
       // Create new document
-      doc = {
+      finalDoc = {
         id: `doc-${Date.now()}`,
         project_id: data.project_id,
         document_type: data.document_type,
@@ -780,14 +782,14 @@ export const mockService = {
         remarks: data.remarks,
         uploaded_by: data.uploaded_by,
         uploaded_at: new Date().toISOString(),
-        status: "Pending"
+        status: "Under Review"
       };
-      db.documents.push(doc);
+      db.documents.push(finalDoc);
     }
     
     saveDB(db);
     logAction("admin@eoms.local", "Upload Document", "Documents", `Uploaded document: ${data.file_name} (v${data.version})`);
-    return doc;
+    return finalDoc;
   },
   updateDocumentStatus: (id: string, status: Document["status"], remarks?: string, approvedBy?: string): Document => {
     const db = getDB();
