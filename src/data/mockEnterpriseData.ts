@@ -24,7 +24,7 @@ export interface EnterpriseProject {
   start_date: string;
   end_date: string;
   status: "Active" | "Planned" | "At Risk" | "Completed" | "On Hold";
-  priority: "Critical" | "High" | "Medium" | "Low";
+  priority: "High" | "Low";
   progress: number;
   milestones: { id: string; name: string; due_date: string; is_completed: boolean }[];
   tasks: { total: number; completed: number; in_progress: number; pending: number };
@@ -192,7 +192,7 @@ export const ENTERPRISE_PROJECTS: EnterpriseProject[] = [
     start_date: "2026-01-15",
     end_date: "2026-11-30",
     status: "Active",
-    priority: "Critical",
+    priority: "High",
     progress: 68,
     milestones: [
       { id: "m-1", name: "Pier Cap Steel Detailing", due_date: "2026-03-31", is_completed: true },
@@ -229,7 +229,7 @@ export const ENTERPRISE_PROJECTS: EnterpriseProject[] = [
     start_date: "2026-04-01",
     end_date: "2027-03-31",
     status: "At Risk",
-    priority: "Critical",
+    priority: "High",
     progress: 30,
     milestones: [
       { id: "m-6", name: "Connection Detailing Approval", due_date: "2026-06-15", is_completed: false },
@@ -246,7 +246,7 @@ export const ENTERPRISE_PROJECTS: EnterpriseProject[] = [
     start_date: "2026-01-01",
     end_date: "2026-05-31",
     status: "Completed",
-    priority: "Medium",
+    priority: "Low",
     progress: 100,
     milestones: [
       { id: "m-7", name: "Final Fabrication Release", due_date: "2026-05-20", is_completed: true },

@@ -17,12 +17,19 @@ import {
   Plus,
   Trash2,
   AlertTriangle,
+  MoreHorizontal,
+  Eye,
+  Edit2,
+  UserPlus,
+  CheckCircle2,
+  Clock,
+  TrendingDown,
 } from "lucide-react";
 import {
   EnterpriseProject,
   EnterpriseAssignment,
 } from "@/data/mockEnterpriseData";
-import { getProjects, createProject, deleteProject, getAssignments, createAssignment } from "@/lib/api/projects";
+import { getProjects, createProject, deleteProject, getAssignments, createAssignment, updateProject } from "@/lib/api/projects";
 import { getEmployees } from "@/lib/api/employees";
 import { cn } from "@/lib/utils";
 
@@ -66,9 +73,15 @@ export default function EnterpriseProjectsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [selectedProj, setSelectedProj] = useState<EnterpriseProject | null>(null);
+  const [viewProj, setViewProj] = useState<EnterpriseProject | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<EnterpriseProject>>({});
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [addForm, setAddForm] = useState({
     code: "", name: "", client: "",
@@ -106,6 +119,65 @@ export default function EnterpriseProjectsPage() {
       console.error(err);
     }
   };
+
+  const handleStatusChange = async (id: string, newStatus: EnterpriseProject["status"]) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p))
+    );
+    try {
+      await updateProject(id, { status: newStatus });
+    } catch (err) {
+      console.error("Failed to update project status", err);
+    }
+  };
+
+  const handlePriorityChange = async (id: string, newPriority: EnterpriseProject["priority"]) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, priority: newPriority } : p))
+    );
+    try {
+      await updateProject(id, { priority: newPriority });
+    } catch (err) {
+      console.error("Failed to update project priority", err);
+    }
+  };
+
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProj) return;
+    setIsSaving(true);
+    try {
+      const updated = await updateProject(selectedProj.id, editForm);
+      setProjects((prev) => prev.map((p) => (p.id === selectedProj.id ? { ...p, ...updated } : p)));
+      setIsEditOpen(false);
+      setToast({ message: "Project updated successfully.", type: "success" });
+    } catch (err) {
+      console.error("Failed to save project", err);
+      setToast({ message: "Failed to update project. Please try again.", type: "error" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteConfirmed = async (id: string) => {
+    try {
+      await deleteProject(id);
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      setAssignments((prev) => prev.filter((a) => a.project_id !== id));
+      setDeleteConfirmId(null);
+      setToast({ message: "Project deleted successfully.", type: "success" });
+    } catch (err) {
+      console.error(err);
+      setToast({ message: "Failed to delete project.", type: "error" });
+    }
+  };
+
+  // Auto-dismiss toast after 3 seconds
+  React.useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const employeeWorkloads = employees.map((emp) => {
     const empAssigns = assignments.filter((a) => a.employee_id === emp.id);
@@ -172,6 +244,24 @@ export default function EnterpriseProjectsPage() {
       "Planned": "bg-slate-50 text-slate-600 border-slate-200",
     };
     return map[status] || "bg-gray-50 text-gray-600 border-gray-200";
+  };
+
+  const priorityBadge = (priority: string) => {
+    const map: Record<string, string> = {
+      "High": "bg-orange-50 text-orange-700 border-orange-200",
+      "Low":  "bg-slate-50 text-slate-600 border-slate-200",
+    };
+    return map[priority] || "bg-gray-50 text-gray-600 border-gray-200";
+  };
+
+  const isOverdue = (endDate: string) => {
+    if (!endDate) return false;
+    return new Date(endDate) < new Date();
+  };
+
+  const formatDate = (d: string) => {
+    if (!d) return "—";
+    return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   };
 
   return (
@@ -280,16 +370,39 @@ export default function EnterpriseProjectsPage() {
                     <th className="px-4 py-3">Project</th>
                     <th className="px-4 py-3">Client</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Priority</th>
+                    <th className="px-4 py-3">Due Date</th>
                     <th className="px-4 py-3">Progress</th>
                     <th className="px-4 py-3">Team</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
+                  {filteredProjects.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-16 text-center">
+                        <div className="flex flex-col items-center gap-3 text-slate-400">
+                          <div className="p-4 bg-slate-50 rounded-full">
+                            <FolderKanban className="h-9 w-9 text-slate-300" />
+                          </div>
+                          <p className="font-semibold text-slate-600 text-sm">No projects available</p>
+                          <p className="text-xs text-slate-400">Create your first project to get started</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {filteredProjects.map((p) => {
                     const projAssigns = assignments.filter((a) => a.project_id === p.id);
+                    const displayAssigns = projAssigns.slice(0, 3);
+                    const extraCount = projAssigns.length - 3;
+                    const overdue = isOverdue(p.end_date) && p.status !== "Completed";
+                    const progressColor = p.progress >= 80 ? "bg-emerald-500" : p.progress >= 40 ? "bg-blue-500" : "bg-amber-500";
                     return (
-                      <tr key={p.id} className="hover:bg-blue-50/30 transition-colors">
+                      <tr
+                        key={p.id}
+                        className="hover:bg-blue-50/30 transition-colors cursor-pointer"
+                        onClick={() => { if (openActionMenu === p.id) setOpenActionMenu(null); }}
+                      >
                         <td className="px-4 py-3.5">
                           <span className="inline-block font-mono text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded mb-0.5">
                             {p.code}
@@ -301,22 +414,66 @@ export default function EnterpriseProjectsPage() {
                             <Building2 className="h-3.5 w-3.5 text-slate-400" />{p.client}
                           </div>
                         </td>
-                        <td className="px-4 py-3.5">
-                          <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1 w-fit", statusBadge(p.status))}>
-                            <span className="h-1.5 w-1.5 rounded-full bg-current" />{p.status}
-                          </span>
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={p.status}
+                            onChange={(e) => handleStatusChange(p.id, e.target.value as EnterpriseProject["status"])}
+                            className={cn(
+                              "text-xs font-semibold rounded-full border px-2.5 py-0.5 cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-blue-200 transition-colors",
+                              statusBadge(p.status)
+                            )}
+                          >
+                            <option value="Active">Active</option>
+                            <option value="At Risk">At Risk</option>
+                            <option value="Completed">Completed</option>
+                            <option value="On Hold">On Hold</option>
+                            <option value="Planned">Planned</option>
+                          </select>
                         </td>
+                        {/* Priority */}
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={p.priority || "Low"}
+                            onChange={(e) => handlePriorityChange(p.id, e.target.value as EnterpriseProject["priority"])}
+                            className={cn(
+                              "text-xs font-bold rounded-full border px-2.5 py-0.5 cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-blue-200 transition-colors w-fit block",
+                              priorityBadge(p.priority || "Low")
+                            )}
+                          >
+                            <option value="High">High</option>
+                            <option value="Low">Low</option>
+                          </select>
+                        </td>
+                        {/* Due Date */}
                         <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-800 text-sm w-9">{p.progress}%</span>
-                            <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${p.progress}%` }} />
-                            </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm text-slate-700 font-medium flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                              {formatDate(p.end_date)}
+                            </span>
+                            {overdue && (
+                              <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 w-fit">
+                                Overdue
+                              </span>
+                            )}
                           </div>
                         </td>
+                        {/* Progress */}
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={cn("h-full rounded-full transition-all", progressColor)}
+                                style={{ width: `${p.progress ?? 0}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-bold text-gray-700 w-8">{p.progress ?? 0}%</span>
+                          </div>
+                        </td>
+                        {/* Team avatars stacked, +N overflow */}
                         <td className="px-4 py-3.5">
                           <div className="flex items-center -space-x-2">
-                            {projAssigns.map((asg) => {
+                            {displayAssigns.map((asg) => {
                               const emp = employees.find((e) => e.id === asg.employee_id);
                               if (!emp) return null;
                               return (
@@ -324,29 +481,58 @@ export default function EnterpriseProjectsPage() {
                                   key={asg.id}
                                   src={emp.avatar}
                                   alt={emp.first_name}
-                                  title={`${emp.first_name} – ${asg.role} (${asg.allocation_percentage}%)`}
+                                  title={`${emp.first_name} ${emp.last_name} – ${asg.role} (${asg.allocation_percentage}%)`}
                                   className="h-7 w-7 rounded-full ring-2 ring-white object-cover"
                                 />
                               );
                             })}
+                            {extraCount > 0 && (
+                              <span className="h-7 w-7 rounded-full ring-2 ring-white bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600">
+                                +{extraCount}
+                              </span>
+                            )}
                             {projAssigns.length === 0 && <span className="text-xs text-slate-400">Unassigned</span>}
                           </div>
                         </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center justify-end gap-2">
+                        {/* Three-dot Action Menu */}
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end relative">
                             <button
-                              onClick={() => { setSelectedProj(p); setIsAssignOpen(true); }}
-                              className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200 transition-colors"
+                              onClick={() => setOpenActionMenu(openActionMenu === p.id ? null : p.id)}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-slate-500 hover:text-slate-800 transition-colors"
+                              title="Actions"
                             >
-                              + Assign
+                              <MoreHorizontal className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => setDeleteConfirmId(p.id)}
-                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 transition-colors"
-                              title="Delete Project"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {openActionMenu === p.id && (
+                              <div className="absolute right-0 top-8 z-30 w-44 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+                                <button
+                                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                                  onClick={() => { setViewProj(p); setOpenActionMenu(null); }}
+                                >
+                                  <Eye className="h-4 w-4" /> View
+                                </button>
+                                <button
+                                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                                  onClick={() => { setSelectedProj(p); setEditForm(p); setIsEditOpen(true); setOpenActionMenu(null); }}
+                                >
+                                  <Edit2 className="h-4 w-4" /> Edit
+                                </button>
+                                <button
+                                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                                  onClick={() => { setSelectedProj(p); setIsAssignOpen(true); setOpenActionMenu(null); }}
+                                >
+                                  <UserPlus className="h-4 w-4" /> Assign Members
+                                </button>
+                                <div className="border-t border-gray-100" />
+                                <button
+                                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                  onClick={() => { setDeleteConfirmId(p.id); setOpenActionMenu(null); }}
+                                >
+                                  <Trash2 className="h-4 w-4" /> Delete
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -465,6 +651,220 @@ export default function EnterpriseProjectsPage() {
           </div>
         )}
       </div>
+
+      {/* VIEW PROJECT MODAL */}
+      {viewProj && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <FolderKanban className="h-5 w-5 text-blue-600" /> Project Details
+              </h3>
+              <button onClick={() => setViewProj(null)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="h-4 w-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-6">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div>
+                  <span className="inline-block font-mono text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded mb-2">
+                    {viewProj.code}
+                  </span>
+                  <h2 className="text-xl font-bold text-gray-900">{viewProj.name}</h2>
+                  <div className="flex items-center gap-2 text-slate-600 mt-2">
+                    <Building2 className="h-4 w-4" /> {viewProj.client}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 items-start md:items-end">
+                  <span className={cn("px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1.5 w-fit", statusBadge(viewProj.status))}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />{viewProj.status}
+                  </span>
+                  <span className={cn("px-3 py-1 rounded-full text-xs font-bold border w-fit block", priorityBadge(viewProj.priority || "Low"))}>
+                    Priority: {viewProj.priority || "Low"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium mb-1">Start Date</p>
+                  <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-slate-400" /> {formatDate(viewProj.start_date)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium mb-1">End Date</p>
+                  <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-slate-400" /> {formatDate(viewProj.end_date)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium mb-1">Budget</p>
+                  <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                    <DollarSign className="h-3.5 w-3.5 text-slate-400" /> ${(viewProj.budget / 1000).toFixed(1)}k
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium mb-1">Spent</p>
+                  <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                    <TrendingDown className="h-3.5 w-3.5 text-slate-400" /> ${(viewProj.spent / 1000).toFixed(1)}k
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-sm font-semibold mb-2">
+                  <span className="text-gray-700">Overall Progress</span>
+                  <span className="text-emerald-600">{viewProj.progress ?? 0}%</span>
+                </div>
+                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${viewProj.progress ?? 0}%` }} />
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Assigned Team</h4>
+                <div className="space-y-3">
+                  {assignments.filter((a) => a.project_id === viewProj.id).map((asg) => {
+                    const emp = employees.find((e) => e.id === asg.employee_id);
+                    if (!emp) return null;
+                    return (
+                      <div key={asg.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg bg-white shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <img src={emp.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{emp.first_name} {emp.last_name}</p>
+                            <p className="text-xs text-slate-500">{emp.designation}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">{asg.role}</p>
+                          <p className="text-xs text-slate-500 mt-1">{asg.allocation_percentage}% Allocation</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {assignments.filter((a) => a.project_id === viewProj.id).length === 0 && (
+                    <p className="text-sm text-slate-500 italic p-4 text-center bg-gray-50 rounded-lg">No team members assigned yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end">
+              <button onClick={() => setViewProj(null)} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-sm font-semibold transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PROJECT MODAL */}
+      {isEditOpen && selectedProj && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Edit2 className="h-5 w-5 text-blue-600" /> Edit Project
+              </h3>
+              <button onClick={() => setIsEditOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="h-4 w-4 text-slate-500" />
+              </button>
+            </div>
+            <form onSubmit={handleEditSave} className="p-6 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Project Code</label>
+                  <input type="text" required value={editForm.code || ""}
+                    onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Client Name</label>
+                  <input type="text" required value={editForm.client || ""}
+                    onChange={(e) => setEditForm({ ...editForm, client: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-gray-50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Project Title</label>
+                <input type="text" required value={editForm.name || ""}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-gray-50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Status</label>
+                  <select value={editForm.status || "Active"} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="At Risk">At Risk</option>
+                    <option value="Completed">Completed</option>
+                    <option value="On Hold">On Hold</option>
+                    <option value="Planned">Planned</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Priority</label>
+                  <select value={editForm.priority || "Low"} onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
+                  >
+                    <option value="High">High</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Start Date</label>
+                  <input type="date" value={editForm.start_date || ""}
+                    onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">End Date</label>
+                  <input type="date" value={editForm.end_date || ""}
+                    onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Budget ($)</label>
+                  <input type="number" required value={editForm.budget || 0}
+                    onChange={(e) => setEditForm({ ...editForm, budget: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Progress (%)</label>
+                  <input type="number" min="0" max="100" required value={editForm.progress ?? 0}
+                    onChange={(e) => setEditForm({ ...editForm, progress: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-100 focus:outline-none bg-white"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <button type="button" onClick={() => setIsEditOpen(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50"
+                  disabled={isSaving}>
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm flex items-center gap-2"
+                  disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* CREATE PROJECT MODAL */}
       {isAddOpen && (
@@ -616,7 +1016,7 @@ export default function EnterpriseProjectsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleDeleteProject(deleteConfirmId)}
+                  onClick={() => handleDeleteConfirmed(deleteConfirmId)}
                   className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
                 >
                   <Trash2 className="h-4 w-4" /> Delete Project
@@ -626,6 +1026,21 @@ export default function EnterpriseProjectsPage() {
           </div>
         );
       })()}
+
+      {/* TOAST NOTIFICATION */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl shadow-xl animate-in slide-in-from-bottom-5">
+          {toast.type === "success" ? (
+            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+          ) : (
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+          )}
+          <p className="text-sm font-semibold text-gray-800">{toast.message}</p>
+          <button onClick={() => setToast(null)} className="ml-2 p-1 hover:bg-gray-100 rounded-lg">
+            <X className="h-4 w-4 text-slate-400" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
