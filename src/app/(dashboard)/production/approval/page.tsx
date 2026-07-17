@@ -36,6 +36,7 @@ export default function ProductionApprovalPage() {
     try {
       const updated = await approveProductionEntry(id);
       loadData();
+      window.dispatchEvent(new CustomEvent('production-action-occurred'));
       if (isDetailsOpen && selectedEntry?.id === id) {
         setSelectedEntry(updated);
       }
@@ -50,6 +51,7 @@ export default function ProductionApprovalPage() {
     try {
       const updated = await rejectProductionEntry(id, reason);
       loadData();
+      window.dispatchEvent(new CustomEvent('production-action-occurred'));
       if (isDetailsOpen && selectedEntry?.id === id) {
         setSelectedEntry(updated);
       }

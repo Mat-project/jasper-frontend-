@@ -84,6 +84,8 @@ export default function ProductionEntryPage() {
           : "Production entry saved as draft.",
       });
       
+      window.dispatchEvent(new CustomEvent('production-action-occurred'));
+
       // Reset numeric fields
       setForm((prev) => ({
         ...prev,

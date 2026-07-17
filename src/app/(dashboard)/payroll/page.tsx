@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   Coins,
   ChevronRight,
@@ -36,37 +36,46 @@ export default function EnterprisePayrollPage() {
   const [editingStructure, setEditingStructure] = useState<EnterpriseSalaryStructure | null>(null);
   const [compensationClassification, setCompensationClassification] = useState("Production Specialist (Submission-Based)");
 
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        const [payslipData, structData, empData] = await Promise.all([
-          getPayslips(),
-          getSalaryStructures(),
-          getEmployees(),
-        ]);
-        setPayslips(payslipData);
-        setSalaryStructures(structData);
-        const mappedEmps = empData.map((emp: any) => ({
-          id: emp.id,
-          code: emp.employee_code || emp.id.substring(0, 8),
-          first_name: emp.first_name || "",
-          last_name: emp.last_name || "",
-          email: emp.email,
-          phone: emp.phone_number || "",
-          avatar: emp.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-          designation: emp.role || "Engineer",
-          department: emp.department || "Engineering",
-          join_date: emp.date_joined ? emp.date_joined.split("T")[0] : "2026-01-01",
-        }));
-        setEmployees(mappedEmps);
-      } catch (err) {
-        console.error("Failed to load payroll data", err);
-      } finally {
-        setLoading(false);
-      }
+  const loadData = useCallback(async () => {
+    try {
+      const [payslipData, structData, empData] = await Promise.all([
+        getPayslips(),
+        getSalaryStructures(),
+        getEmployees(),
+      ]);
+      setPayslips(payslipData);
+      setSalaryStructures(structData);
+      const mappedEmps = empData.map((emp: any) => ({
+        id: emp.id,
+        code: emp.employee_code || emp.id.substring(0, 8),
+        first_name: emp.first_name || "",
+        last_name: emp.last_name || "",
+        email: emp.email,
+        phone: emp.phone_number || "",
+        avatar: emp.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+        designation: emp.role || "Engineer",
+        department: emp.department || "Engineering",
+        join_date: emp.date_joined ? emp.date_joined.split("T")[0] : "2026-01-01",
+      }));
+      setEmployees(mappedEmps);
+    } catch (err) {
+      console.error("Failed to load payroll data", err);
+    } finally {
+      setLoading(false);
     }
-    loadData();
   }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  React.useEffect(() => {
+    const handleAction = () => {
+      loadData();
+    };
+    window.addEventListener('production-action-occurred', handleAction);
+    return () => window.removeEventListener('production-action-occurred', handleAction);
+  }, [loadData]);
 
   const handleGeneratePayslips = async () => {
     try {
