@@ -11,6 +11,8 @@ export interface EnterpriseSalaryStructure {
   esi_deduction: number;
   tds_tax_deduction: number;
   overtime_hourly_rate: number;
+  drawing_submission_rate?: number;
+  drawing_checking_rate?: number;
 }
 
 export interface EnterprisePayslip {

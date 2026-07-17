@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  IndianRupee,
+  Coins,
   ChevronRight,
   Search,
   Landmark,
@@ -85,13 +85,15 @@ export default function EnterprisePayrollPage() {
     const data: any = {
       employee_id: formData.get("employee_id"),
       basic_salary: Number(formData.get("basic_salary")),
-      hra: Number(formData.get("hra")),
-      special_allowance: Number(formData.get("special_allowance")),
-      conveyance_allowance: Number(formData.get("conveyance_allowance")),
-      pf_deduction: Number(formData.get("pf_deduction")),
-      esi_deduction: Number(formData.get("esi_deduction")),
-      tds_tax_deduction: Number(formData.get("tds_tax_deduction")),
-      overtime_hourly_rate: Number(formData.get("overtime_hourly_rate")),
+      drawing_submission_rate: Number(formData.get("drawing_submission_rate")),
+      drawing_checking_rate: Number(formData.get("drawing_checking_rate")),
+      hra: 0,
+      special_allowance: 0,
+      conveyance_allowance: 0,
+      pf_deduction: 0,
+      esi_deduction: 0,
+      tds_tax_deduction: 0,
+      overtime_hourly_rate: 0,
     };
 
     try {
@@ -117,6 +119,7 @@ export default function EnterprisePayrollPage() {
   const totalNet = payslips.reduce((sum, p) => sum + p.net_salary, 0);
   const totalDeductions = payslips.reduce((sum, p) => sum + p.gross_deductions, 0);
   const totalOT = payslips.reduce((sum, p) => sum + (p.overtime_pay || 0), 0);
+  const totalBaseSalary = salaryStructures.reduce((sum, ss) => sum + ss.basic_salary, 0);
 
   const filteredPayslips = payslips.filter((p) => {
     const emp = employees.find((e) => e.id === p.employee_id);
@@ -125,7 +128,7 @@ export default function EnterprisePayrollPage() {
   });
 
   const formatCurrency = (n: number) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
 
   const handleViewPayslip = (payslip: EnterprisePayslip) => {
     setSelectedPayslip(payslip);
@@ -143,10 +146,10 @@ export default function EnterprisePayrollPage() {
             <span className="text-slate-600 font-semibold">Payroll & Compensation</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-            <span className="p-1.5 bg-blue-50 rounded-lg"><IndianRupee className="h-5 w-5 text-blue-600" /></span>
+            <span className="p-1.5 bg-blue-50 rounded-lg"><Coins className="h-5 w-5 text-blue-600" /></span>
             Payroll Management
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage compensation, generate payslips, and track statutory deductions.</p>
+          <p className="text-sm text-slate-500 mt-1">Manage compensation, generate payslips, and track drawing-piece incentives.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -161,10 +164,10 @@ export default function EnterprisePayrollPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Gross Payroll", value: formatCurrency(totalGross), sub: "Total CTC commitment", icon: <IndianRupee className="h-5 w-5 text-blue-600" />, iconBg: "bg-blue-50" },
-          { label: "Net Disbursement", value: formatCurrency(totalNet), sub: "Take-home salary total", icon: <Landmark className="h-5 w-5 text-emerald-600" />, iconBg: "bg-emerald-50" },
-          { label: "PF + TDS Deductions", value: formatCurrency(totalDeductions), sub: "Statutory compliance", icon: <ShieldCheck className="h-5 w-5 text-amber-500" />, iconBg: "bg-amber-50" },
-          { label: "Overtime Pay", value: formatCurrency(totalOT), sub: "Approved OT hours", icon: <Clock className="h-5 w-5 text-purple-600" />, iconBg: "bg-purple-50" },
+          { label: "GROSS PAYROLL", value: formatCurrency(totalGross), sub: "Base salaries + incentives", icon: <Coins className="h-5 w-5 text-blue-600" />, iconBg: "bg-blue-50" },
+          { label: "NET DISBURSEMENT", value: formatCurrency(totalNet), sub: "Final payout after deductions", icon: <Landmark className="h-5 w-5 text-emerald-600" />, iconBg: "bg-emerald-50" },
+          { label: "TOTAL BASE SALARY", value: formatCurrency(totalBaseSalary), sub: "Fixed monthly payroll", icon: <ShieldCheck className="h-5 w-5 text-amber-500" />, iconBg: "bg-amber-50" },
+          { label: "DRAWING INCENTIVES", value: formatCurrency(totalOT), sub: "Approved piecewise outputs", icon: <Clock className="h-5 w-5 text-purple-600" />, iconBg: "bg-purple-50" },
         ].map((card, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex items-center justify-between">
             <div>
@@ -294,8 +297,6 @@ export default function EnterprisePayrollPage() {
               {salaryStructures.map((ss) => {
                 const emp = employees.find((e) => e.id === ss.employee_id);
               if (!emp) return null;
-              const totalEarnings = ss.basic_salary + ss.hra + ss.special_allowance + ss.conveyance_allowance;
-              const totalDeds = ss.pf_deduction + ss.esi_deduction + ss.tds_tax_deduction;
               return (
                 <div key={ss.employee_id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                   {/* Header */}
@@ -308,63 +309,40 @@ export default function EnterprisePayrollPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-slate-500">Monthly CTC</p>
-                      <p className="text-lg font-bold text-gray-900">{formatCurrency(totalEarnings)}</p>
+                      <p className="text-xs text-slate-500">Monthly Base</p>
+                      <p className="text-lg font-bold text-gray-900">{formatCurrency(ss.basic_salary)}</p>
                     </div>
                   </div>
                   {/* Body */}
-                  <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100">
-                    {/* Earnings */}
-                    <div className="p-4 space-y-2">
-                      <h4 className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1 pb-1 border-b border-emerald-100">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" /> Earnings
-                      </h4>
-                      {[
-                        { label: "Basic Salary", value: ss.basic_salary },
-                        { label: "HRA", value: ss.hra },
-                        { label: "Special Allowance", value: ss.special_allowance },
-                        { label: "Conveyance", value: ss.conveyance_allowance },
-                      ].map((item) => (
-                        <div key={item.label} className="flex justify-between text-sm">
-                          <span className="text-slate-600">{item.label}</span>
-                          <span className="font-semibold text-gray-800">{formatCurrency(item.value)}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between text-sm pt-2 border-t border-emerald-100 font-bold">
-                        <span className="text-emerald-700">Total Earnings</span>
-                        <span className="text-emerald-700">{formatCurrency(totalEarnings)}</span>
+                  <div className="p-5 space-y-4">
+                    <div className="grid grid-cols-3 gap-4 border-b border-gray-100 pb-4">
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Base Salary</p>
+                        <p className="text-sm font-bold text-gray-900 mt-0.5">{formatCurrency(ss.basic_salary)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Submission Rate</p>
+                        <p className="text-sm font-bold text-blue-600 mt-0.5">{formatCurrency(ss.drawing_submission_rate ?? 250)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 font-medium">Checking Rate</p>
+                        <p className="text-sm font-bold text-purple-600 mt-0.5">{formatCurrency(ss.drawing_checking_rate ?? 350)}</p>
                       </div>
                     </div>
-                    {/* Deductions */}
-                    <div className="p-4 space-y-2">
-                      <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider flex items-center gap-1 pb-1 border-b border-red-100">
-                        <span className="h-2 w-2 rounded-full bg-red-500" /> Deductions
-                      </h4>
-                      {[
-                        { label: "PF (Employee)", value: ss.pf_deduction },
-                        { label: "ESI", value: ss.esi_deduction },
-                        { label: "TDS", value: ss.tds_tax_deduction },
-                      ].map((item) => (
-                        <div key={item.label} className="flex justify-between text-sm">
-                          <span className="text-slate-600">{item.label}</span>
-                          <span className="font-semibold text-red-600">{formatCurrency(item.value)}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between text-sm pt-2 border-t border-red-100 font-bold">
-                        <span className="text-red-700">Total Deductions</span>
-                        <span className="text-red-700">{formatCurrency(totalDeds)}</span>
+                    <div className="grid grid-cols-3 gap-4 text-xs text-slate-500">
+                      <div>
+                        <span>PF: </span>
+                        <span className="font-semibold text-gray-700">{formatCurrency(ss.pf_deduction || 0)}</span>
+                      </div>
+                      <div>
+                        <span>ESI: </span>
+                        <span className="font-semibold text-gray-700">{formatCurrency(ss.esi_deduction || 0)}</span>
+                      </div>
+                      <div>
+                        <span>TDS: </span>
+                        <span className="font-semibold text-gray-700">{formatCurrency(ss.tds_tax_deduction || 0)}</span>
                       </div>
                     </div>
-                  </div>
-                  {/* Net */}
-                  <div className="px-5 py-3 bg-blue-50 border-t border-blue-100 flex justify-between items-center">
-                    <span className="text-sm font-bold text-blue-800">Net Monthly Salary</span>
-                    <span className="text-xl font-extrabold text-blue-800">{formatCurrency(totalEarnings - totalDeds)}</span>
-                  </div>
-                  {/* OT Rate */}
-                  <div className="px-5 py-2 border-t border-gray-100 flex justify-between items-center text-xs text-slate-500">
-                    <span>Overtime Hourly Rate</span>
-                    <span className="font-bold text-gray-700">{formatCurrency(ss.overtime_hourly_rate)}/hr</span>
                   </div>
                   {/* Actions */}
                   <div className="px-5 py-2 bg-gray-50 border-t border-gray-100 flex justify-end">
@@ -445,11 +423,8 @@ export default function EnterprisePayrollPage() {
                       Earnings
                     </h4>
                     {[
-                      { label: "Basic Salary", value: ss.basic_salary },
-                      { label: "HRA", value: ss.hra },
-                      { label: "Special Allowance", value: ss.special_allowance },
-                      { label: "Conveyance", value: ss.conveyance_allowance },
-                      ...(selectedPayslip.overtime_pay ? [{ label: "Overtime Pay", value: selectedPayslip.overtime_pay }] : []),
+                      { label: "Base Salary", value: ss.basic_salary },
+                      ...(selectedPayslip.overtime_pay ? [{ label: "Drawing Incentives", value: selectedPayslip.overtime_pay }] : []),
                       ...(selectedPayslip.bonus ? [{ label: "Bonus", value: selectedPayslip.bonus }] : []),
                     ].map((item) => (
                       <div key={item.label} className="flex justify-between text-sm">
@@ -468,9 +443,9 @@ export default function EnterprisePayrollPage() {
                       Deductions
                     </h4>
                     {[
-                      { label: "PF (Employee)", value: ss.pf_deduction },
-                      { label: "ESI", value: ss.esi_deduction },
-                      { label: "TDS", value: ss.tds_tax_deduction },
+                      ...(ss.pf_deduction ? [{ label: "PF (Employee)", value: ss.pf_deduction }] : []),
+                      ...(ss.esi_deduction ? [{ label: "ESI", value: ss.esi_deduction }] : []),
+                      ...(ss.tds_tax_deduction ? [{ label: "TDS", value: ss.tds_tax_deduction }] : []),
                     ].map((item) => (
                       <div key={item.label} className="flex justify-between text-sm">
                         <span className="text-slate-600">{item.label}</span>
@@ -579,38 +554,20 @@ export default function EnterprisePayrollPage() {
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Basic Salary</label>
-                    <input type="number" name="basic_salary" defaultValue={editingStructure?.basic_salary || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Base Monthly Salary (AED)</label>
+                    <input type="number" name="basic_salary" defaultValue={editingStructure?.basic_salary || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">HRA</label>
-                    <input type="number" name="hra" defaultValue={editingStructure?.hra || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Special Allowance</label>
-                    <input type="number" name="special_allowance" defaultValue={editingStructure?.special_allowance || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Conveyance Allowance</label>
-                    <input type="number" name="conveyance_allowance" defaultValue={editingStructure?.conveyance_allowance || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">PF Deduction</label>
-                    <input type="number" name="pf_deduction" defaultValue={editingStructure?.pf_deduction || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">ESI Deduction</label>
-                    <input type="number" name="esi_deduction" defaultValue={editingStructure?.esi_deduction || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">TDS Tax Deduction</label>
-                    <input type="number" name="tds_tax_deduction" defaultValue={editingStructure?.tds_tax_deduction || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Overtime Hourly Rate</label>
-                    <input type="number" name="overtime_hourly_rate" defaultValue={editingStructure?.overtime_hourly_rate || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Drawing Submission Rate (AED)</label>
+                      <input type="number" name="drawing_submission_rate" defaultValue={editingStructure?.drawing_submission_rate ?? 250} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Drawing Checking Rate (AED)</label>
+                      <input type="number" name="drawing_checking_rate" defaultValue={editingStructure?.drawing_checking_rate ?? 350} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
                   </div>
                 </div>
               </div>
