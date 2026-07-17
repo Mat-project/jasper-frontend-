@@ -13,7 +13,7 @@ export interface EnterpriseSalaryStructure {
   overtime_hourly_rate: number;
   drawing_submission_rate?: number;
   drawing_checking_rate?: number;
-  incentive_role?: string;
+  compensation_classification?: string;
 }
 
 export interface EnterprisePayslip {
