@@ -34,6 +34,7 @@ export default function EnterprisePayrollPage() {
   const [generatePeriod, setGeneratePeriod] = useState("July 2026");
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const [editingStructure, setEditingStructure] = useState<EnterpriseSalaryStructure | null>(null);
+  const [incentiveRole, setIncentiveRole] = useState("Drawing Submit Person");
 
   React.useEffect(() => {
     async function loadData() {
@@ -85,8 +86,9 @@ export default function EnterprisePayrollPage() {
     const data: any = {
       employee_id: formData.get("employee_id"),
       basic_salary: Number(formData.get("basic_salary")),
-      drawing_submission_rate: Number(formData.get("drawing_submission_rate")),
-      drawing_checking_rate: Number(formData.get("drawing_checking_rate")),
+      incentive_role: incentiveRole,
+      drawing_submission_rate: incentiveRole === "Drawing Submit Person" ? Number(formData.get("drawing_submission_rate")) : 0,
+      drawing_checking_rate: incentiveRole === "Drawing Check Person" ? Number(formData.get("drawing_checking_rate")) : 0,
       hra: 0,
       special_allowance: 0,
       conveyance_allowance: 0,
@@ -286,6 +288,7 @@ export default function EnterprisePayrollPage() {
               <button
                 onClick={() => {
                   setEditingStructure(null);
+                  setIncentiveRole("Drawing Submit Person");
                   setIsStructureModalOpen(true);
                 }}
                 className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
@@ -349,6 +352,7 @@ export default function EnterprisePayrollPage() {
                     <button
                       onClick={() => {
                         setEditingStructure(ss);
+                        setIncentiveRole(ss.incentive_role || "Drawing Submit Person");
                         setIsStructureModalOpen(true);
                       }}
                       className="px-3 py-1 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-100 transition-colors"
@@ -554,21 +558,36 @@ export default function EnterprisePayrollPage() {
                     ))}
                   </select>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-4 font-sans">
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Base Monthly Salary (AED)</label>
                     <input type="number" name="basic_salary" defaultValue={editingStructure?.basic_salary || 0} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Incentive Role</label>
+                    <select
+                      name="incentive_role"
+                      value={incentiveRole}
+                      onChange={(e) => setIncentiveRole(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Drawing Submit Person">Drawing Submit Person</option>
+                      <option value="Drawing Check Person">Drawing Check Person</option>
+                    </select>
+                  </div>
+                  {incentiveRole === "Drawing Submit Person" && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Drawing Submission Rate (AED)</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Submission Rate (AED)</label>
                       <input type="number" name="drawing_submission_rate" defaultValue={editingStructure?.drawing_submission_rate ?? 250} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
+                  )}
+                  {incentiveRole === "Drawing Check Person" && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Drawing Checking Rate (AED)</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Checking Rate (AED)</label>
                       <input type="number" name="drawing_checking_rate" defaultValue={editingStructure?.drawing_checking_rate ?? 350} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
               <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
