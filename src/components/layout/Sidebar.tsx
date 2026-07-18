@@ -26,6 +26,7 @@ import {
   ChevronRight,
   ChevronLeft,
   CreditCard,
+  DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -202,6 +203,7 @@ export function Sidebar() {
       ],
     },
     { label: "Projects", href: "/projects", icon: FolderKanban },
+    { label: "Commercial", href: "/commercial", icon: DollarSign },
     { label: "Attendance", href: "/attendance", icon: Clock },
     { label: "Payroll", href: "/payroll", icon: CreditCard },
     {
@@ -239,7 +241,7 @@ export function Sidebar() {
 
       // 2. Managers see specific modules, but restricted in Masters and no Administration
       if (isManager) {
-        const allowedManager = ["Dashboard", "Masters", "Projects", "Attendance", "Payroll", "Production", "Documents", "Revisions", "Reports"];
+        const allowedManager = ["Dashboard", "Masters", "Projects", "Commercial", "Attendance", "Payroll", "Production", "Documents", "Revisions", "Reports"];
         return allowedManager.includes(item.label);
       }
 

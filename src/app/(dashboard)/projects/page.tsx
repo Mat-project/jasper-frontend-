@@ -9,7 +9,6 @@ import {
   ShieldAlert,
   TrendingUp,
   Briefcase,
-  ChevronRight,
   Calendar,
   X,
   Filter,
@@ -24,7 +23,10 @@ import {
   CheckCircle2,
   Clock,
   TrendingDown,
+  ExternalLink,
+  ChevronRight,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   EnterpriseProject,
   EnterpriseAssignment,
@@ -70,6 +72,7 @@ export default function EnterpriseProjectsPage() {
     loadData();
   }, []);
   const [activeTab, setActiveTab] = useState<"portfolio" | "resource_matrix" | "milestones">("portfolio");
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -403,11 +406,20 @@ export default function EnterpriseProjectsPage() {
                         className="hover:bg-blue-50/30 transition-colors cursor-pointer"
                         onClick={() => { if (openActionMenu === p.id) setOpenActionMenu(null); }}
                       >
-                        <td className="px-4 py-3.5">
-                          <span className="inline-block font-mono text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded mb-0.5">
-                            {p.code}
-                          </span>
-                          <p className="font-semibold text-gray-900 text-sm">{p.name}</p>
+                        <td 
+                          className="px-4 py-3.5 cursor-pointer hover:bg-blue-100/50" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${p.id}`);
+                          }}
+                        >
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="inline-block font-mono text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">
+                              {p.code}
+                            </span>
+                            <ExternalLink className="h-3 w-3 text-slate-400" />
+                          </div>
+                          <p className="font-semibold text-gray-900 text-sm hover:text-blue-700 transition-colors">{p.name}</p>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5 text-slate-600 text-sm">
@@ -510,7 +522,13 @@ export default function EnterpriseProjectsPage() {
                                   className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                                   onClick={() => { setViewProj(p); setOpenActionMenu(null); }}
                                 >
-                                  <Eye className="h-4 w-4" /> View
+                                  <Eye className="h-4 w-4" /> Quick View
+                                </button>
+                                <button
+                                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                                  onClick={() => { router.push(`/projects/${p.id}`); setOpenActionMenu(null); }}
+                                >
+                                  <ExternalLink className="h-4 w-4" /> Full Details
                                 </button>
                                 <button
                                   className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
