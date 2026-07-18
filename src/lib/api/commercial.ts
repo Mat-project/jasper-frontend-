@@ -56,12 +56,38 @@ export const downloadInvoicePdf = async (id: string, invoiceNumber: string) => {
   const response = await apiClient.get(`/api/v1/commercial/invoices/${id}/pdf/`, {
     responseType: "blob",
   });
-  
-  // Create a blob link to download
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement("a");
   link.href = url;
   link.setAttribute("download", `${invoiceNumber}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.parentNode?.removeChild(link);
+};
+
+// Download Payment Statement PDF
+export const downloadPaymentStatement = async (id: string, invoiceNumber: string) => {
+  const response = await apiClient.get(`/api/v1/commercial/invoices/${id}/payment_statement/`, {
+    responseType: "blob",
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", `${invoiceNumber}_Payment_Statement.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.parentNode?.removeChild(link);
+};
+
+// Download Commercial Package ZIP
+export const downloadCommercialPackage = async (id: string, invoiceNumber: string) => {
+  const response = await apiClient.get(`/api/v1/commercial/invoices/${id}/commercial_package/`, {
+    responseType: "blob",
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/zip" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", `${invoiceNumber}_Commercial_Package.zip`);
   document.body.appendChild(link);
   link.click();
   link.parentNode?.removeChild(link);

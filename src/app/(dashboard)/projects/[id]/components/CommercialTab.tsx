@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { DollarSign, FileText, FileCheck, CreditCard, Plus, Download, AlertTriangle, Send, CheckCircle, XCircle } from "lucide-react";
+import { DollarSign, FileText, FileCheck, CreditCard, Plus, Download, Package, AlertTriangle, Send, CheckCircle, XCircle } from "lucide-react";
 import { 
   getProjectCommercialSummary, getPurchaseOrders, getInvoices, getPayments,
-  submitInvoice, approveInvoice, sendInvoice, cancelInvoice, downloadInvoicePdf
+  submitInvoice, approveInvoice, sendInvoice, cancelInvoice, downloadInvoicePdf,
+  downloadPaymentStatement, downloadCommercialPackage
 } from "@/lib/api/commercial";
 import { cn } from "@/lib/utils";
 import UploadPOModal from "./UploadPOModal";
@@ -235,14 +236,35 @@ export default function CommercialTab({ project }: CommercialTabProps) {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                            {/* Invoice PDF — always shown for non-Draft */}
                             {inv.status !== "Draft" && (
                               <button 
                                 onClick={() => downloadInvoicePdf(inv.id, inv.invoice_number)} 
                                 className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded transition-colors"
-                                title="Download PDF"
+                                title="Download Invoice PDF"
                               >
                                 <Download className="h-4 w-4" />
+                              </button>
+                            )}
+                            {/* Payment Statement — shown if any payment has been recorded */}
+                            {(inv.payments?.length > 0 || parseFloat(inv.total_paid || "0") > 0) && (
+                              <button
+                                onClick={() => downloadPaymentStatement(inv.id, inv.invoice_number)}
+                                className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded transition-colors"
+                                title="Download Payment Statement"
+                              >
+                                <FileCheck className="h-4 w-4" />
+                              </button>
+                            )}
+                            {/* Commercial Package ZIP — restricted to approved/sent/partially paid/paid */}
+                            {["Approved", "Sent", "Partially Paid", "Paid"].includes(inv.status) && (
+                              <button
+                                onClick={() => downloadCommercialPackage(inv.id, inv.invoice_number)}
+                                className="text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 p-1.5 rounded transition-colors"
+                                title="Download Commercial Package (ZIP)"
+                              >
+                                <Package className="h-4 w-4" />
                               </button>
                             )}
                             {inv.status === "Draft" && (
