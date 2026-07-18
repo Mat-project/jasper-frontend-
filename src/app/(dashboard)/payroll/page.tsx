@@ -126,11 +126,11 @@ export default function EnterprisePayrollPage() {
   const [search, setSearch] = useState("");
   const [selectedPayslip, setSelectedPayslip] = useState<EnterprisePayslip | null>(null);
 
-  const totalGross = payslips.reduce((sum, p) => sum + p.gross_earnings, 0);
-  const totalNet = payslips.reduce((sum, p) => sum + p.net_salary, 0);
-  const totalDeductions = payslips.reduce((sum, p) => sum + p.gross_deductions, 0);
-  const totalOT = payslips.reduce((sum, p) => sum + (p.overtime_pay || 0), 0);
-  const totalBaseSalary = salaryStructures.reduce((sum, ss) => sum + ss.basic_salary, 0);
+  const totalGross = Math.round(payslips.reduce((sum, p) => sum + p.gross_earnings, 0) * 100) / 100;
+  const totalNet = Math.round(payslips.reduce((sum, p) => sum + p.net_salary, 0) * 100) / 100;
+  const totalDeductions = Math.round(payslips.reduce((sum, p) => sum + p.gross_deductions, 0) * 100) / 100;
+  const totalOT = Math.round(payslips.reduce((sum, p) => sum + (p.overtime_pay || 0), 0) * 100) / 100;
+  const totalBaseSalary = Math.round(salaryStructures.reduce((sum, ss) => sum + ss.basic_salary, 0) * 100) / 100;
 
   const filteredPayslips = payslips.filter((p) => {
     const emp = employees.find((e) => e.id === p.employee_id);
@@ -139,7 +139,7 @@ export default function EnterprisePayrollPage() {
   });
 
   const formatCurrency = (n: number) =>
-    new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
   const handleViewPayslip = (payslip: EnterprisePayslip) => {
     setSelectedPayslip(payslip);
