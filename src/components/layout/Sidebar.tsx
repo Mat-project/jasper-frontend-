@@ -199,13 +199,14 @@ export function Sidebar() {
         { label: "Departments", href: "/masters/departments", icon: Building },
         { label: "Sections", href: "/masters/sections", icon: Layers },
         { label: "Roles", href: "/masters/roles", icon: ShieldCheck },
-        { label: "Drawing Categories", href: "/masters/drawing-categories", icon: Tags },
+        // { label: "Drawing Categories", href: "/masters/drawing-categories", icon: Tags }, // Disabled per client priority
       ],
     },
     { label: "Projects", href: "/projects", icon: FolderKanban },
-    { label: "Commercial", href: "/commercial", icon: DollarSign },
+    // { label: "Commercial", href: "/commercial", icon: DollarSign }, // Disabled per client priority
     { label: "Attendance", href: "/attendance", icon: Clock },
-    { label: "Payroll", href: "/payroll", icon: CreditCard },
+    // { label: "Payroll", href: "/payroll", icon: CreditCard }, // Disabled per client priority
+    /*
     {
       label: "Production",
       icon: Factory,
@@ -218,6 +219,7 @@ export function Sidebar() {
     { label: "Documents", href: "/documents", icon: FileText },
     { label: "Revisions", href: "/revisions", icon: GitBranch },
     { label: "Reports", href: "/reports", icon: BarChart3 },
+    */
     {
       label: "Administration",
       icon: Shield,

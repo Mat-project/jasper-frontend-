@@ -6,29 +6,22 @@ import {
   FolderKanban,
   Building2,
   Calendar,
-  DollarSign,
-  TrendingDown,
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
   Edit2,
-  Trash2,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
-import CommercialTab from "./components/CommercialTab";
-// Placeholder imports for other tabs
-// import OverviewTab from "./components/OverviewTab";
-// import TeamTab from "./components/TeamTab";
+import AIRegisterTab from "./components/AIRegisterTab";
+// Commercial is disconnected but not removed from the codebase per client instruction
+// import CommercialTab from "./components/CommercialTab";
 
 export default function ProjectDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "team" | "production" | "documents" | "commercial" | "activity"
-  >("commercial"); // default to commercial for testing
 
   useEffect(() => {
     async function loadProject() {
@@ -84,15 +77,6 @@ export default function ProjectDetailsPage() {
     return map[priority] || "bg-gray-50 text-gray-600 border-gray-200";
   };
 
-  const tabs = [
-    { id: "overview", label: "Overview" },
-    { id: "team", label: "Team" },
-    { id: "production", label: "Production" },
-    { id: "documents", label: "Documents" },
-    { id: "commercial", label: "Commercial" },
-    { id: "activity", label: "Activity Log" },
-  ];
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 space-y-6">
       {/* Breadcrumbs */}
@@ -145,44 +129,9 @@ export default function ProjectDetailsPage() {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex overflow-x-auto no-scrollbar">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={cn(
-              "px-6 py-4 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors",
-              activeTab === tab.id
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-gray-50/50"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
+      {/* Main Content: Register AI Hub (Tabs removed per client request) */}
       <div className="min-h-[50vh]">
-        {activeTab === "overview" && (
-          <div className="p-6 bg-white rounded-xl border border-gray-200 shadow-sm text-center text-slate-500 py-12">
-            Overview tab content (Migrated from modal)
-          </div>
-        )}
-        {activeTab === "team" && (
-          <div className="p-6 bg-white rounded-xl border border-gray-200 shadow-sm text-center text-slate-500 py-12">
-            Team tab content (Migrated from modal)
-          </div>
-        )}
-        {activeTab === "commercial" && (
-          <CommercialTab project={project} />
-        )}
-        {["production", "documents", "activity"].includes(activeTab) && (
-          <div className="p-6 bg-white rounded-xl border border-gray-200 shadow-sm text-center text-slate-500 py-12">
-            {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} tab content
-          </div>
-        )}
+        <AIRegisterTab project={project} />
       </div>
     </div>
   );

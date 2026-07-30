@@ -11,38 +11,23 @@ interface PaginatedResponse<T> {
 }
 
 export async function getProjects(): Promise<EnterpriseProject[]> {
-  const res = await apiClient.get<PaginatedResponse<EnterpriseProject>>("/api/v1/projects/projects/", {
+  const res = await apiClient.get<PaginatedResponse<EnterpriseProject>>("/api/v1/projects/", {
     params: { page_size: 100 },
   });
   return res.data.results;
 }
 
 export async function createProject(data: Partial<EnterpriseProject>): Promise<EnterpriseProject> {
-  const res = await apiClient.post<EnterpriseProject>("/api/v1/projects/projects/", data);
+  const res = await apiClient.post<EnterpriseProject>("/api/v1/projects/", data);
   return res.data;
 }
 
 export async function updateProject(id: string, data: Partial<EnterpriseProject>): Promise<EnterpriseProject> {
-  const res = await apiClient.patch<EnterpriseProject>(`/api/v1/projects/projects/${id}/`, data);
+  const res = await apiClient.patch<EnterpriseProject>(`/api/v1/projects/${id}/`, data);
   return res.data;
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await apiClient.delete(`/api/v1/projects/projects/${id}/`);
+  await apiClient.delete(`/api/v1/projects/${id}/`);
 }
 
-export async function getAssignments(): Promise<EnterpriseAssignment[]> {
-  const res = await apiClient.get<PaginatedResponse<EnterpriseAssignment>>("/api/v1/projects/assignments/", {
-    params: { page_size: 200 },
-  });
-  return res.data.results;
-}
-
-export async function createAssignment(data: Partial<EnterpriseAssignment>): Promise<EnterpriseAssignment> {
-  const res = await apiClient.post<EnterpriseAssignment>("/api/v1/projects/assignments/", data);
-  return res.data;
-}
-
-export async function deleteAssignment(id: string): Promise<void> {
-  await apiClient.delete(`/api/v1/projects/assignments/${id}/`);
-}
