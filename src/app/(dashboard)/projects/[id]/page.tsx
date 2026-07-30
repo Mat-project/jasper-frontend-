@@ -14,6 +14,9 @@ import {
 import { getProjects } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
 import AIRegisterTab from "./components/AIRegisterTab";
+import RevisionManagementTab from "./components/RevisionManagementTab";
+import RelationshipConfirmation from "./components/RelationshipConfirmation";
+import RegisterReview from "./components/RegisterReview";
 // Commercial is disconnected but not removed from the codebase per client instruction
 // import CommercialTab from "./components/CommercialTab";
 
@@ -129,9 +132,12 @@ export default function ProjectDetailsPage() {
         </div>
       </div>
 
-      {/* Main Content: Register AI Hub (Tabs removed per client request) */}
-      <div className="min-h-[50vh]">
+      {/* Main Content: Register AI Hub */}
+      <div className="min-h-[50vh] space-y-8">
         <AIRegisterTab project={project} />
+        <RelationshipConfirmation projectId={project.id} />
+        <RegisterReview projectId={project.id} />
+        <RevisionManagementTab projectId={project.id} />
       </div>
     </div>
   );

@@ -59,6 +59,7 @@ export default function UploadZIP({
 
       if (res.ok) {
         setFile(null);
+        window.dispatchEvent(new Event("zip-upload-started"));
         onUploadSuccess();
       } else {
         const data = await res.json().catch(() => ({}));

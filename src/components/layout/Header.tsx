@@ -29,6 +29,7 @@ import {
   markAllAsRead, 
   NotificationResponse 
 } from "@/lib/api/notifications";
+import { GlobalSearch } from "./GlobalSearch";
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -189,8 +190,10 @@ export function Header() {
 
   return (
     <header className="flex items-center justify-between h-16 px-6 border-b border-border bg-background shrink-0">
-      {/* Left — breadcrumb placeholder */}
-      <div />
+      {/* Left — Global Search */}
+      <div className="flex-1 flex items-center">
+        <GlobalSearch />
+      </div>
 
       {/* Right — actions */}
       <div className="flex items-center gap-3">
