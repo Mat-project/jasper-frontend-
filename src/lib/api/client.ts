@@ -33,7 +33,7 @@ export const getRefreshToken = (): string | null =>
 
 export const setTokens = (access: string, refresh: string): void => {
   const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
-  Cookies.set(TOKEN_KEY, access, { expires: 1 / 96, secure: isSecure, sameSite: "Lax" }); // 15 min
+  Cookies.set(TOKEN_KEY, access, { expires: 1 / 24, secure: isSecure, sameSite: "Lax" }); // 60 min — matches ACCESS_TOKEN_LIFETIME
   Cookies.set(REFRESH_KEY, refresh, { expires: 7, secure: isSecure, sameSite: "Lax" }); // 7 days
 };
 

@@ -5,15 +5,8 @@ import UploadZIP from "./UploadZIP";
 import ProcessingStatus from "./ProcessingStatus";
 import RelationshipConfirmation from "./RelationshipConfirmation";
 import RegisterReview from "./RegisterReview";
-import { getAccessToken } from "@/lib/api/client";
-import {
-  getRelationships,
-  getRegisters,
-  getRegisterRows,
-  Relationship,
-  Register,
-  RegisterRow,
-} from "@/lib/api/register_ai";
+import { getRelationships, getRegisters, getRegisterRows, Relationship, Register, RegisterRow } from "@/lib/api/register_ai";
+import apiClient from "@/lib/api/client";
 
 // ─── Pipeline stages ──────────────────────────────────────────────────────────
 // upload → processing → relationships → register
@@ -28,21 +21,20 @@ export default function AIRegisterTab({ project }: { project: any }) {
   const [rows, setRows] = useState<RegisterRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ─── Fetch the latest processing job status ──────────────────────────────
+  // ── Fetch the latest processing job status ──────────────────────────────
   const fetchJobStatus = useCallback(async (): Promise<any> => {
     try {
-      const token = getAccessToken();
-      const res = await fetch(
-        `http://localhost:8000/api/v1/projects/${project.id}/processing-status/`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      // Use apiClient (axios) so the 401 interceptor auto-refreshes the token.
+      // Raw fetch() bypasses the interceptor and silently fails on expiry,
+      // causing the user to be logged out after the token's TTL.
+      const res = await apiClient.get(
+        `/api/v1/projects/${project.id}/processing-status/`
       );
-      if (res.ok) {
-        const data = await res.json();
-        setJobState(data);
-        return data;
-      }
+      setJobState(res.data);
+      return res.data;
     } catch {
-      /* Network error — silently ignore during polling */
+      /* Network / auth error — silently ignore during polling.
+         If the refresh also fails, the interceptor will redirect to /login. */
     }
     return null;
   }, [project.id]);
