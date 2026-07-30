@@ -77,10 +77,10 @@ export interface PaginatedResponse<T> {
 
 /** Fetch all proposed relationships for a project */
 export async function getRelationships(projectId: string): Promise<Relationship[]> {
-  const res = await apiClient.get<PaginatedResponse<Relationship>>(
+  const res = await apiClient.get<Relationship[]>(
     `${BASE}/${projectId}/relationships/`
   );
-  return res.data.results;
+  return res.data;
 }
 
 /** Confirm a single relationship */
