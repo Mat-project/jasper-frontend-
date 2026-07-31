@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -11,35 +11,103 @@ import {
   Zap,
   FileText,
   Package,
+  RefreshCw,
 } from "lucide-react";
 import {
   getRelationships,
   confirmRelationship,
   rejectRelationship,
   generateRegister,
-  Relationship,
 } from "@/lib/api/register_ai";
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+// Flexible type that handles both old nested schema and Kausik's flat schema
+interface RelationshipRecord {
+  id: string;
+  project?: string;
+  confidence_score: string;
+  status: string;
+  // Flat fields (Kausik's new schema)
+  drawing_number?: string | null;
+  bbs_number?: string | null;
+  extracted_details?: {
+    drawing_revision?: string | null;
+    bbs_revision?: string | null;
+    total_weight?: string | null;
+  };
+  // Nested fields (legacy schema - handled defensively)
+  drawing_files?: Array<{
+    id: string;
+    drawing_metadata?: {
+      drawing_number?: string | null;
+      revision?: string | null;
+      title?: string | null;
+      ai_confidence_score?: string | null;
+    };
+  }>;
+  bbs_files?: Array<{
+    id: string;
+    bbs_metadata?: {
+      bbs_number?: string | null;
+      revision?: string | null;
+      weight?: string | null;
+      ai_confidence_score?: string | null;
+    };
+  }>;
+  reviewed_at?: string | null;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function getDrawingNumber(rel: RelationshipRecord): string {
+  // Try flat field first (Kausik's schema)
+  if (rel.drawing_number) return rel.drawing_number;
+  // Fallback: nested drawing_files array
+  const nums = (rel.drawing_files ?? [])
+    .map((d) => d.drawing_metadata?.drawing_number)
+    .filter(Boolean)
+    .join(", ");
+  return nums || "—";
+}
+
+function getBBSNumber(rel: RelationshipRecord): string {
+  if (rel.bbs_number) return rel.bbs_number;
+  const nums = (rel.bbs_files ?? [])
+    .map((b) => b.bbs_metadata?.bbs_number)
+    .filter(Boolean)
+    .join(", ");
+  return nums || "—";
+}
+
+function getDrawingRevision(rel: RelationshipRecord): string {
+  if (rel.extracted_details?.drawing_revision) return rel.extracted_details.drawing_revision;
+  return rel.drawing_files?.[0]?.drawing_metadata?.revision ?? "—";
+}
+
+function getBBSRevision(rel: RelationshipRecord): string {
+  if (rel.extracted_details?.bbs_revision) return rel.extracted_details.bbs_revision;
+  return rel.bbs_files?.[0]?.bbs_metadata?.revision ?? "—";
+}
+
+function getTotalWeight(rel: RelationshipRecord): string {
+  const w = rel.extracted_details?.total_weight ?? rel.bbs_files?.[0]?.bbs_metadata?.weight;
+  if (!w || w === "None" || w === "null") return "—";
+  const num = parseFloat(w);
+  return isNaN(num) ? "—" : `${num.toLocaleString()} kg`;
+}
+
+function isPending(status: string): boolean {
+  return status === "Proposed" || status === "Pending";
+}
+
 function ConfidenceBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
+  const normalized = score > 1 ? score / 100 : score;
+  const pct = Math.round(normalized * 100);
   const color =
-    pct >= 90
-      ? "bg-emerald-500"
-      : pct >= 70
-      ? "bg-amber-400"
-      : pct >= 50
-      ? "bg-orange-500"
-      : "bg-red-500";
+    pct >= 90 ? "bg-emerald-500" : pct >= 70 ? "bg-amber-400" : pct >= 50 ? "bg-orange-500" : "bg-red-500";
   const textColor =
-    pct >= 90
-      ? "text-emerald-700"
-      : pct >= 70
-      ? "text-amber-700"
-      : pct >= 50
-      ? "text-orange-700"
-      : "text-red-700";
+    pct >= 90 ? "text-emerald-700" : pct >= 70 ? "text-amber-700" : pct >= 50 ? "text-orange-700" : "text-red-700";
   const bgColor =
     pct >= 90
       ? "bg-emerald-50 border-emerald-200"
@@ -52,24 +120,22 @@ function ConfidenceBar({ score }: { score: number }) {
   return (
     <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border ${bgColor}`}>
       <div className="w-20 h-2 bg-slate-200 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${color} rounded-full transition-all duration-500`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
       </div>
       <span className={`text-xs font-bold tabular-nums ${textColor}`}>{pct}%</span>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: Relationship["status"] }) {
+function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     Proposed: "bg-blue-50 text-blue-700 border-blue-200",
+    Pending: "bg-blue-50 text-blue-700 border-blue-200",
     Confirmed: "bg-emerald-50 text-emerald-700 border-emerald-200",
     Rejected: "bg-red-50 text-red-700 border-red-200",
   };
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${map[status] ?? ""}`}>
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${map[status] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
       {status}
     </span>
   );
@@ -79,31 +145,56 @@ function StatusBadge({ status }: { status: Relationship["status"] }) {
 
 export default function RelationshipConfirmation({
   projectId,
-  relationships: initial,
   onAllConfirmed,
 }: {
   projectId: string;
-  relationships: Relationship[];
-  onAllConfirmed: () => void;
+  // relationships prop is intentionally removed — component owns its own data fetching
+  onAllConfirmed?: () => void;
 }) {
-  const [relationships, setRelationships] = useState<Relationship[]>(initial);
-  const [loading, setLoading] = useState<Record<string, string>>({}); // relId -> "confirm"|"reject"
+  const [relationships, setRelationships] = useState<RelationshipRecord[]>([]);
+  const [fetchLoading, setFetchLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<Record<string, string>>({}); // relId -> "confirm"|"reject"
   const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const pending = relationships.filter((r) => r.status === "Proposed");
+  // ── Fetch relationships ──────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    setFetchLoading(true);
+    setFetchError(null);
+    try {
+      const data = await getRelationships(projectId);
+      // Ensure we always set an array, even if API returns null/undefined
+      setRelationships(Array.isArray(data) ? data : []);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load relationships.";
+      setFetchError(msg);
+      setRelationships([]);
+    } finally {
+      setFetchLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchData();
+    // Re-fetch when zip processing completes
+    const handleZipDone = () => fetchData();
+    window.addEventListener("zip-processing-completed", handleZipDone);
+    return () => window.removeEventListener("zip-processing-completed", handleZipDone);
+  }, [fetchData]);
+
+  // ── Derived state ────────────────────────────────────────────────────────────
+  const pending = relationships.filter((r) => isPending(r.status));
   const confirmed = relationships.filter((r) => r.status === "Confirmed");
   const rejected = relationships.filter((r) => r.status === "Rejected");
   const highConf = pending.filter((r) => parseFloat(r.confidence_score) >= 0.9);
-  const allResolved = pending.length === 0;
+  const allResolved = relationships.length > 0 && pending.length === 0;
 
-  const mutate = async (
-    relId: string,
-    action: "confirm" | "reject"
-  ) => {
-    setLoading((p) => ({ ...p, [relId]: action }));
-    setError(null);
+  // ── Actions ──────────────────────────────────────────────────────────────────
+  const mutate = async (relId: string, action: "confirm" | "reject") => {
+    setActionLoading((p) => ({ ...p, [relId]: action }));
+    setActionError(null);
     try {
       const updated =
         action === "confirm"
@@ -114,9 +205,9 @@ export default function RelationshipConfirmation({
       );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Action failed. Please try again.";
-      setError(msg);
+      setActionError(msg);
     } finally {
-      setLoading((p) => {
+      setActionLoading((p) => {
         const next = { ...p };
         delete next[relId];
         return next;
@@ -132,27 +223,77 @@ export default function RelationshipConfirmation({
 
   const handleGenerate = async () => {
     setGenerating(true);
-    setError(null);
+    setActionError(null);
     try {
       await generateRegister(projectId);
-      onAllConfirmed();
+      onAllConfirmed?.();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Register generation failed.";
-      setError(msg);
+      setActionError(msg);
     } finally {
       setGenerating(false);
     }
   };
 
-  const renderRow = (rel: Relationship) => {
+  // ── Loading state ─────────────────────────────────────────────────────────────
+  if (fetchLoading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+        <div className="flex items-center gap-3 text-slate-500">
+          <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+          <span className="text-sm font-medium">Loading relationships...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Fetch error state ────────────────────────────────────────────────────────
+  if (fetchError) {
+    return (
+      <div className="bg-white rounded-xl border border-red-200 shadow-sm p-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-red-600">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span className="text-sm font-medium">{fetchError}</span>
+          </div>
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Empty state (no relationships yet) ───────────────────────────────────────
+  if (relationships.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+        <div className="py-10 text-center text-slate-400">
+          <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
+          <p className="font-medium text-slate-500">No relationships found for this project.</p>
+          <p className="text-sm mt-1">Upload a ZIP file and let AI extract the relationships.</p>
+          <button
+            onClick={fetchData}
+            className="mt-4 flex items-center gap-2 mx-auto px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main render ──────────────────────────────────────────────────────────────
+  const renderRow = (rel: RelationshipRecord) => {
     const score = parseFloat(rel.confidence_score);
     const isExpanded = expanded === rel.id;
-    const drawingNums = rel.drawing_files
-      .map((d) => d.drawing_metadata.drawing_number ?? "—")
-      .join(", ");
-    const bbsNums = rel.bbs_files
-      .map((b) => b.bbs_metadata.bbs_number ?? "—")
-      .join(", ");
+    const drawingNum = getDrawingNumber(rel);
+    const bbsNum = getBBSNumber(rel);
 
     return (
       <div
@@ -172,11 +313,7 @@ export default function RelationshipConfirmation({
             onClick={() => setExpanded(isExpanded ? null : rel.id)}
             className="text-slate-400 hover:text-slate-700 shrink-0"
           >
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
 
           {/* Drawing */}
@@ -184,16 +321,11 @@ export default function RelationshipConfirmation({
             <FileText className="h-4 w-4 text-blue-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-xs text-slate-400 font-medium">Drawing</p>
-              <p className="text-sm font-semibold text-slate-800 truncate">
-                {drawingNums}
-              </p>
-              <p className="text-xs text-slate-400">
-                Rev: {rel.drawing_files[0]?.drawing_metadata.revision ?? "—"}
-              </p>
+              <p className="text-sm font-semibold text-slate-800 truncate">{drawingNum}</p>
+              <p className="text-xs text-slate-400">Rev: {getDrawingRevision(rel)}</p>
             </div>
           </div>
 
-          {/* Arrow */}
           <span className="text-slate-300 text-lg font-light shrink-0">↔</span>
 
           {/* BBS */}
@@ -201,16 +333,14 @@ export default function RelationshipConfirmation({
             <Package className="h-4 w-4 text-violet-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-xs text-slate-400 font-medium">BBS</p>
-              <p className="text-sm font-semibold text-slate-800 truncate">{bbsNums}</p>
-              <p className="text-xs text-slate-400">
-                Rev: {rel.bbs_files[0]?.bbs_metadata.revision ?? "—"}
-              </p>
+              <p className="text-sm font-semibold text-slate-800 truncate">{bbsNum}</p>
+              <p className="text-xs text-slate-400">Rev: {getBBSRevision(rel)}</p>
             </div>
           </div>
 
           {/* Confidence */}
           <div className="shrink-0">
-            <ConfidenceBar score={score} />
+            <ConfidenceBar score={isNaN(score) ? 0 : score} />
           </div>
 
           {/* Status */}
@@ -219,15 +349,15 @@ export default function RelationshipConfirmation({
           </div>
 
           {/* Actions */}
-          {rel.status === "Proposed" && (
+          {isPending(rel.status) && (
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => mutate(rel.id, "confirm")}
-                disabled={!!loading[rel.id]}
+                disabled={!!actionLoading[rel.id]}
                 title="Confirm Relationship"
                 className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 disabled:opacity-50 transition-colors"
               >
-                {loading[rel.id] === "confirm" ? (
+                {actionLoading[rel.id] === "confirm" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
@@ -235,11 +365,11 @@ export default function RelationshipConfirmation({
               </button>
               <button
                 onClick={() => mutate(rel.id, "reject")}
-                disabled={!!loading[rel.id]}
+                disabled={!!actionLoading[rel.id]}
                 title="Reject Relationship"
                 className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 disabled:opacity-50 transition-colors"
               >
-                {loading[rel.id] === "reject" ? (
+                {actionLoading[rel.id] === "reject" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <XCircle className="h-4 w-4" />
@@ -253,76 +383,40 @@ export default function RelationshipConfirmation({
         {isExpanded && (
           <div className="border-t border-slate-100 bg-slate-50 px-5 py-4 grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Drawing Details
-              </p>
-              {rel.drawing_files.map((d) => (
-                <div key={d.id} className="space-y-1">
-                  <p>
-                    <span className="text-slate-400">Number: </span>
-                    <span className="font-semibold text-slate-700">
-                      {d.drawing_metadata.drawing_number ?? "—"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-400">Title: </span>
-                    <span className="text-slate-700">
-                      {d.drawing_metadata.title ?? "—"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-400">Revision: </span>
-                    <span className="font-semibold text-slate-700">
-                      {d.drawing_metadata.revision ?? "—"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-400">AI Confidence: </span>
-                    <span className="font-semibold text-slate-700">
-                      {d.drawing_metadata.ai_confidence_score
-                        ? `${Math.round(parseFloat(d.drawing_metadata.ai_confidence_score) * 100)}%`
-                        : "—"}
-                    </span>
-                  </p>
-                </div>
-              ))}
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Drawing Details</p>
+              <div className="space-y-1">
+                <p>
+                  <span className="text-slate-400">Number: </span>
+                  <span className="font-semibold text-slate-700">{drawingNum}</span>
+                </p>
+                <p>
+                  <span className="text-slate-400">Revision: </span>
+                  <span className="font-semibold text-slate-700">{getDrawingRevision(rel)}</span>
+                </p>
+                <p>
+                  <span className="text-slate-400">AI Confidence: </span>
+                  <span className="font-semibold text-slate-700">
+                    {isNaN(score) ? "—" : `${Math.round((score > 1 ? score / 100 : score) * 100)}%`}
+                  </span>
+                </p>
+              </div>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                BBS Details
-              </p>
-              {rel.bbs_files.map((b) => (
-                <div key={b.id} className="space-y-1">
-                  <p>
-                    <span className="text-slate-400">Number: </span>
-                    <span className="font-semibold text-slate-700">
-                      {b.bbs_metadata.bbs_number ?? "—"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-400">Revision: </span>
-                    <span className="font-semibold text-slate-700">
-                      {b.bbs_metadata.revision ?? "—"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-400">Total Weight: </span>
-                    <span className="font-semibold text-slate-700">
-                      {b.bbs_metadata.weight
-                        ? `${parseFloat(b.bbs_metadata.weight).toLocaleString()} kg`
-                        : "—"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-slate-400">AI Confidence: </span>
-                    <span className="font-semibold text-slate-700">
-                      {b.bbs_metadata.ai_confidence_score
-                        ? `${Math.round(parseFloat(b.bbs_metadata.ai_confidence_score) * 100)}%`
-                        : "—"}
-                    </span>
-                  </p>
-                </div>
-              ))}
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">BBS Details</p>
+              <div className="space-y-1">
+                <p>
+                  <span className="text-slate-400">Number: </span>
+                  <span className="font-semibold text-slate-700">{bbsNum}</span>
+                </p>
+                <p>
+                  <span className="text-slate-400">Revision: </span>
+                  <span className="font-semibold text-slate-700">{getBBSRevision(rel)}</span>
+                </p>
+                <p>
+                  <span className="text-slate-400">Total Weight: </span>
+                  <span className="font-semibold text-slate-700">{getTotalWeight(rel)}</span>
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -331,14 +425,14 @@ export default function RelationshipConfirmation({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h3 className="text-xl font-bold text-gray-900">Relationship Confirmation</h3>
           <p className="text-sm text-slate-500 mt-1">
-            Review AI-proposed links between Drawing sheets and BBS files. Confirm
-            or reject each match before generating the Register.
+            Review AI-proposed links between Drawing sheets and BBS files. Confirm or reject each match before
+            generating the Register.
           </p>
         </div>
 
@@ -355,14 +449,21 @@ export default function RelationshipConfirmation({
               {rejected.length} Rejected
             </div>
           )}
+          <button
+            onClick={fetchData}
+            title="Refresh"
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* Global error */}
-      {error && (
+      {/* Action error */}
+      {actionError && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
+          {actionError}
         </div>
       )}
 
@@ -371,9 +472,7 @@ export default function RelationshipConfirmation({
         <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
           <div className="flex items-center gap-2 text-blue-700">
             <Zap className="h-4 w-4" />
-            <span className="text-sm font-semibold">
-              {highConf.length} relationships have ≥90% confidence
-            </span>
+            <span className="text-sm font-semibold">{highConf.length} relationships have ≥90% confidence</span>
           </div>
           <button
             onClick={bulkConfirm}
@@ -386,16 +485,7 @@ export default function RelationshipConfirmation({
       )}
 
       {/* Relationship list */}
-      <div className="space-y-3">
-        {relationships.length === 0 ? (
-          <div className="py-16 text-center text-slate-400">
-            <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
-            <p className="font-medium">No relationships found for this project.</p>
-          </div>
-        ) : (
-          relationships.map(renderRow)
-        )}
-      </div>
+      <div className="space-y-3">{relationships.map(renderRow)}</div>
 
       {/* Generate Register CTA */}
       <div
@@ -416,11 +506,7 @@ export default function RelationshipConfirmation({
           disabled={!allResolved || generating}
           className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-2"
         >
-          {generating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4" />
-          )}
+          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
           {generating ? "Generating..." : "Generate Register"}
         </button>
       </div>

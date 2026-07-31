@@ -107,10 +107,12 @@ export function GlobalSearch() {
     }
   };
 
-  const handleResultClick = (resultId: string) => {
+  const handleResultClick = (result: SearchResult) => {
     setIsOpen(false);
     setQuery("");
-    router.push(`/documents/${resultId}`);
+    // result.id is in format "{row_id}-{type}"
+    const rowId = result.id.split('-')[0];
+    router.push(`/projects/${result.project_id}?tab=Review&row=${rowId}`);
   };
 
   return (
@@ -156,14 +158,14 @@ export function GlobalSearch() {
               
               {results.length === 0 && !loading ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">
-                  No documents found matching "{query}"
+                  No documents found matching &quot;{query}&quot;
                 </div>
               ) : (
                 <div className="divide-y divide-border/40">
                   {results.map((result, idx) => (
                     <div 
                       key={idx}
-                      onClick={() => handleResultClick(result.id)}
+                      onClick={() => handleResultClick(result)}
                       className="p-4 hover:bg-muted/50 cursor-pointer transition-colors group flex gap-4 items-start"
                     >
                       <div className={`mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${

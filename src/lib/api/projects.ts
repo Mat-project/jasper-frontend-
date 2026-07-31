@@ -1,5 +1,16 @@
 import apiClient from "./client";
-import type { EnterpriseProject, EnterpriseAssignment } from "@/data/mockEnterpriseData";
+
+export interface EnterpriseProject {
+  id: string;
+  code: string;
+  name: string;
+  client: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  budget: string;
+  spent: string;
+}
 
 interface PaginatedResponse<T> {
   count: number;

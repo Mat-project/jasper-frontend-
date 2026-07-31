@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getReport, downloadReportCSV } from "@/lib/api/reports";
 import { getProjects } from "@/lib/api/projects";
 import { getEmployees } from "@/lib/api/employees";
@@ -50,7 +50,7 @@ export default function ReportsPage() {
       .catch((err) => console.error("Employees load failed:", err));
   }, []);
 
-  const handleGenerate = async (e?: React.FormEvent) => {
+  const handleGenerate = useCallback(async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
     setError(null);
@@ -58,6 +58,7 @@ export default function ReportsPage() {
       // Build API params
       const params: Record<string, any> = {
         page,
+        page_size: 20,
       };
       if (filters.startDate) params.start_date = filters.startDate;
       if (filters.endDate) params.end_date = filters.endDate;
@@ -82,11 +83,11 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedReport, page, filters]);
 
   useEffect(() => {
     handleGenerate();
-  }, [selectedReport, page]);
+  }, [selectedReport, page, handleGenerate]);
 
   const handleCSVExport = () => {
     const params: Record<string, any> = {};

@@ -61,6 +61,25 @@ export default function RegisterReview({
   const validationStatus = register.validation_report?.status ?? "—";
   const visibleExceptions = showAllExceptions ? allExceptions : allExceptions.slice(0, 3);
 
+  const scrollToFirstIssue = (type: "Error" | "Warning") => {
+    const targetRow = rows.find(r => 
+      r.validation_exceptions?.some(e => 
+        type === "Error" ? (e.severity === "Error" || e.severity === "Critical") : e.severity === "Warning"
+      )
+    );
+    if (targetRow) {
+      setExpandedRow(targetRow.id);
+      setTimeout(() => {
+        const el = document.getElementById(`row-${targetRow.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-blue-400', 'bg-blue-50/50');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-50/50'), 2000);
+        }
+      }, 100);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -94,9 +113,10 @@ export default function RegisterReview({
           <p className="text-xs text-slate-500 mt-1 font-medium">Total Rows</p>
         </div>
         <div
-          className={`border rounded-xl p-4 text-center ${
+          onClick={() => errors.length > 0 && scrollToFirstIssue("Error")}
+          className={`border rounded-xl p-4 text-center cursor-pointer transition-colors ${
             errors.length > 0
-              ? "bg-red-50 border-red-200"
+              ? "bg-red-50 border-red-200 hover:bg-red-100"
               : "bg-emerald-50 border-emerald-200"
           }`}
         >
@@ -110,9 +130,10 @@ export default function RegisterReview({
           <p className="text-xs text-slate-500 mt-1 font-medium">Errors</p>
         </div>
         <div
-          className={`border rounded-xl p-4 text-center ${
+          onClick={() => warnings.length > 0 && scrollToFirstIssue("Warning")}
+          className={`border rounded-xl p-4 text-center cursor-pointer transition-colors ${
             warnings.length > 0
-              ? "bg-amber-50 border-amber-200"
+              ? "bg-amber-50 border-amber-200 hover:bg-amber-100"
               : "bg-emerald-50 border-emerald-200"
           }`}
         >
@@ -222,7 +243,7 @@ export default function RegisterReview({
               const hasIssues = (row.validation_exceptions?.length ?? 0) > 0;
 
               return (
-                <div key={row.id}>
+                <div key={row.id} id={`row-${row.id}`} className="transition-all duration-500">
                   <div
                     className={`grid grid-cols-12 gap-4 px-5 py-4 items-center text-sm ${
                       hasIssues ? "bg-red-50/40" : "hover:bg-slate-50/60"

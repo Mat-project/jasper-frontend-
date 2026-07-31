@@ -57,6 +57,7 @@ export interface Register {
   version_number: number;
   status: "Draft" | "Active" | "Superseded";
   generated_at: string;
+  created_by?: { first_name?: string };
   validation_report: {
     id: string;
     status: "Passed" | "Failed" | "Overridden";
@@ -77,10 +78,13 @@ export interface PaginatedResponse<T> {
 
 /** Fetch all proposed relationships for a project */
 export async function getRelationships(projectId: string): Promise<Relationship[]> {
-  const res = await apiClient.get<Relationship[]>(
+  const res = await apiClient.get<any>(
     `${BASE}/${projectId}/relationships/`
   );
-  return res.data;
+  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
+    return res.data.results;
+  }
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 /** Confirm a single relationship */
@@ -117,12 +121,14 @@ export async function generateRegister(projectId: string): Promise<Register> {
 
 // ─── Registers ────────────────────────────────────────────────────────────────
 
-/** Fetch all register versions for a project */
 export async function getRegisters(projectId: string): Promise<Register[]> {
-  const res = await apiClient.get<PaginatedResponse<Register>>(
+  const res = await apiClient.get<any>(
     `${BASE}/${projectId}/registers/`
   );
-  return res.data.results;
+  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
+    return res.data.results;
+  }
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 /** Fetch register rows for a specific register ID */
@@ -130,8 +136,29 @@ export async function getRegisterRows(
   projectId: string,
   registerId: string
 ): Promise<RegisterRow[]> {
-  const res = await apiClient.get<PaginatedResponse<RegisterRow>>(
+  const res = await apiClient.get<any>(
     `${BASE}/${projectId}/registers/${registerId}/rows/`
   );
-  return res.data.results;
+  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
+    return res.data.results;
+  }
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+/** Fetch version comparison data */
+export async function getVersionComparison(
+  projectId: string,
+  fromVersion: number,
+  toVersion: number
+): Promise<any> {
+  const res = await apiClient.get<any>(
+    `/api/v1/projects/${projectId}/version-comparison/`,
+    {
+      params: {
+        from_version: fromVersion,
+        to_version: toVersion,
+      }
+    }
+  );
+  return res.data;
 }

@@ -15,8 +15,7 @@ import {
   TrendingDown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { EnterpriseProject } from "@/data/mockEnterpriseData";
-import { getProjects, createProject, deleteProject } from "@/lib/api/projects";
+import { getProjects, createProject, deleteProject, EnterpriseProject } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
 
 export default function EnterpriseProjectsPage() {

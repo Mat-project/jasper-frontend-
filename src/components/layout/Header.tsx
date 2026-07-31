@@ -21,7 +21,7 @@ import {
   Activity,
   FileCheck
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   getNotifications, 
   getUnreadCount, 
@@ -40,7 +40,7 @@ export function Header() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch count and list
-  const fetchNotificationData = async () => {
+  const fetchNotificationData = React.useCallback(async () => {
     if (!user) return;
     try {
       const count = await getUnreadCount();
@@ -51,7 +51,7 @@ export function Header() {
     } catch (e) {
       console.error("Failed to fetch notifications:", e);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchNotificationData();
@@ -62,7 +62,7 @@ export function Header() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [user]);
+  }, [fetchNotificationData]);
 
   // Click outside listener to close dropdown
   useEffect(() => {

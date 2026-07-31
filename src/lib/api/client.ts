@@ -85,8 +85,11 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
     };
 
+    // Do not intercept 401s from login or refresh endpoints
+    const isAuthEndpoint = originalRequest.url?.includes("/auth/login") || originalRequest.url?.includes("/auth/refresh");
+
     // Only intercept 401 errors, and avoid infinite loops
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    if (error.response?.status !== 401 || originalRequest._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
 
