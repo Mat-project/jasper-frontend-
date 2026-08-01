@@ -234,12 +234,14 @@ export default function ProjectDetailsPage() {
         
         {activeTab === "Review" && register ? (
           <RegisterReview
+            projectId={id}
             register={register}
             rows={rows}
             onUploadNew={() => {
               fetchRegisterData();
               setActiveTab("Revisions");
             }}
+            onSaveSuccess={fetchRegisterData}
           />
         ) : activeTab === "Review" ? (
           <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-border">

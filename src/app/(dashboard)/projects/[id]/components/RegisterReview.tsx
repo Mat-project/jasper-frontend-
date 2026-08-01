@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -10,6 +10,10 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  Plus,
+  Trash2,
+  Save,
+  Check
 } from "lucide-react";
 import { Register, RegisterRow } from "@/lib/api/register_ai";
 
@@ -42,16 +46,30 @@ function ValidationIcon({ status }: { status: string }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RegisterReview({
+  projectId,
   register,
   rows,
   onUploadNew,
+  onSaveSuccess,
 }: {
+  projectId: string;
   register: Register;
   rows: RegisterRow[];
   onUploadNew: () => void;
+  onSaveSuccess?: () => void;
 }) {
+  const [editableRows, setEditableRows] = useState<RegisterRow[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [showAllExceptions, setShowAllExceptions] = useState(false);
+
+  // Sync with prop changes (e.g. initial load or post-save refetch)
+  useEffect(() => {
+    setEditableRows(rows);
+    setDeletedIds([]);
+  }, [rows]);
 
   const allExceptions = register.validation_report?.exceptions ?? [];
   const errors = allExceptions.filter(
@@ -61,8 +79,118 @@ export default function RegisterReview({
   const validationStatus = register.validation_report?.status ?? "—";
   const visibleExceptions = showAllExceptions ? allExceptions : allExceptions.slice(0, 3);
 
+  // Check if any row has changed or a new row has been added/deleted
+  const getIsDirty = () => {
+    if (deletedIds.length > 0) return true;
+    if (editableRows.length !== rows.length) return true;
+    
+    const originalMap = new Map(rows.map((r) => [r.id, r]));
+    for (const r of editableRows) {
+      if (r.id.startsWith("temp-")) return true;
+      const orig = originalMap.get(r.id);
+      if (!orig) return true;
+      if (
+        r.drawing_number !== orig.drawing_number ||
+        r.drawing_title !== orig.drawing_title ||
+        r.drawing_rev !== orig.drawing_rev ||
+        r.bbs_numbers !== orig.bbs_numbers ||
+        r.bbs_revs !== orig.bbs_revs ||
+        r.total_weight !== orig.total_weight ||
+        r.sheet_no !== orig.sheet_no ||
+        r.drawn_by !== orig.drawn_by ||
+        r.checked_by !== orig.checked_by ||
+        r.section !== orig.section ||
+        r.mail_no !== orig.mail_no ||
+        r.remarks !== orig.remarks
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const isDirty = getIsDirty();
+
+  const handleCellChange = (rowId: string, field: keyof RegisterRow, value: any) => {
+    setEditableRows((prev) =>
+      prev.map((r) => (r.id === rowId ? { ...r, [field]: value } : r))
+    );
+  };
+
+  const handleAddRow = () => {
+    const tempId = `temp-${Date.now()}`;
+    const newRow: RegisterRow = {
+      id: tempId,
+      drawing_number: "NEW-DWG",
+      drawing_title: "",
+      drawing_rev: "00",
+      bbs_numbers: "",
+      bbs_revs: "",
+      total_weight: "",
+      sheet_no: "",
+      drawn_by: "",
+      checked_by: "",
+      section: "",
+      mail_no: "",
+      remarks: "",
+      validation_exceptions: []
+    };
+    setEditableRows((prev) => [...prev, newRow]);
+    setExpandedRow(tempId);
+  };
+
+  const handleDeleteRow = (rowId: string) => {
+    if (!rowId.startsWith("temp-")) {
+      setDeletedIds((prev) => [...prev, rowId]);
+    }
+    setEditableRows((prev) => prev.filter((r) => r.id !== rowId));
+  };
+
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
+    setSaveSuccess(false);
+    try {
+      const { bulkSaveRegisterRows } = await import("@/lib/api/register_ai");
+      
+      const originalMap = new Map(rows.map((r) => [r.id, r]));
+      const modifiedOrNew = editableRows.filter((r) => {
+        if (r.id.startsWith("temp-")) return true;
+        const orig = originalMap.get(r.id);
+        if (!orig) return true;
+        return (
+          r.drawing_number !== orig.drawing_number ||
+          r.drawing_title !== orig.drawing_title ||
+          r.drawing_rev !== orig.drawing_rev ||
+          r.bbs_numbers !== orig.bbs_numbers ||
+          r.bbs_revs !== orig.bbs_revs ||
+          r.total_weight !== orig.total_weight ||
+          r.sheet_no !== orig.sheet_no ||
+          r.drawn_by !== orig.drawn_by ||
+          r.checked_by !== orig.checked_by ||
+          r.section !== orig.section ||
+          r.mail_no !== orig.mail_no ||
+          r.remarks !== orig.remarks
+        );
+      });
+
+      await bulkSaveRegisterRows(projectId, register.id, {
+        upsert_rows: modifiedOrNew,
+        delete_row_ids: deletedIds,
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+      onSaveSuccess?.();
+    } catch (error) {
+      console.error("Failed to save changes:", error);
+      alert("Error saving manual register changes. Please verify field data.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const scrollToFirstIssue = (type: "Error" | "Warning") => {
-    const targetRow = rows.find(r => 
+    const targetRow = editableRows.find(r => 
       r.validation_exceptions?.some(e => 
         type === "Error" ? (e.severity === "Error" || e.severity === "Critical") : e.severity === "Warning"
       )
@@ -85,31 +213,62 @@ export default function RegisterReview({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h3 className="text-xl font-bold text-gray-900">
+          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             Register Review{" "}
             <span className="text-slate-400 font-normal text-base">
               v{register.version_number}
             </span>
+            {isDirty && (
+              <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200 font-semibold animate-pulse">
+                Unsaved Changes
+              </span>
+            )}
           </h3>
           <p className="text-sm text-slate-500 mt-1">
             Generated on{" "}
-            {new Date(register.generated_at).toLocaleString()}. Review the
-            compiled register rows and validation report below.
+            {new Date(register.generated_at).toLocaleString()}. Double-click any cell to manually correct values or add/delete rows below.
           </p>
         </div>
-        <button
-          onClick={onUploadNew}
-          className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors"
-        >
-          <RotateCcw className="h-4 w-4" />
-          Upload New Revision
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleAddRow}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 bg-white rounded-lg text-sm font-semibold transition-colors"
+          >
+            <Plus className="h-4 w-4 text-blue-600" />
+            Add Row
+          </button>
+          <button
+            onClick={handleSaveChanges}
+            disabled={!isDirty || isSaving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ${
+              isDirty
+                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+            }`}
+          >
+            {isSaving ? (
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="h-4 w-4 text-white" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {isSaving ? "Saving..." : saveSuccess ? "Saved!" : "Save Changes"}
+          </button>
+          <button
+            onClick={onUploadNew}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Upload New Revision
+          </button>
+        </div>
       </div>
 
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 text-center">
-          <p className="text-3xl font-bold text-blue-600">{rows.length}</p>
+          <p className="text-3xl font-bold text-blue-600">{editableRows.length}</p>
           <p className="text-xs text-slate-500 mt-1 font-medium">Total Rows</p>
         </div>
         <div
@@ -213,146 +372,241 @@ export default function RegisterReview({
         </div>
       )}
 
-      {/* Register rows table */}
-      <div className="border border-slate-200 rounded-xl overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-3 bg-slate-50 border-b border-slate-200">
-          <FileSpreadsheet className="h-4 w-4 text-slate-500" />
-          <p className="font-semibold text-slate-700 text-sm">Register Rows</p>
+      {/* Register rows table (Excel Layout scrollable horizontally) */}
+      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-50 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <FileSpreadsheet className="h-4 w-4 text-slate-500" />
+            <p className="font-semibold text-slate-700 text-sm">Register Rows</p>
+          </div>
+          <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+            Interactive Sheet
+          </span>
         </div>
 
-        {rows.length === 0 ? (
+        {editableRows.length === 0 ? (
           <div className="py-12 text-center text-slate-400">
             <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm font-medium">No register rows found.</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {/* Column headers */}
-            <div className="grid grid-cols-12 gap-4 px-5 py-2.5 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wide">
-              <div className="col-span-1" />
-              <div className="col-span-3">Drawing No</div>
-              <div className="col-span-1">Rev</div>
-              <div className="col-span-3">BBS Numbers</div>
-              <div className="col-span-1">Rev</div>
-              <div className="col-span-2">Total Weight</div>
-              <div className="col-span-1">Issues</div>
-            </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[1500px] divide-y divide-slate-100">
+              {/* Column headers */}
+              <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50/50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 items-center">
+                <div className="col-span-1 flex items-center justify-center">Actions</div>
+                <div className="col-span-1">Dwg No</div>
+                <div className="col-span-2">Drawing Title</div>
+                <div className="col-span-1">BBS No</div>
+                <div className="col-span-1">Weight</div>
+                <div className="col-span-1">Sheet</div>
+                <div className="col-span-1">Dwg Rev</div>
+                <div className="col-span-1">BBS Rev</div>
+                <div className="col-span-1">Drawn By</div>
+                <div className="col-span-1">Checked By</div>
+                <div className="col-span-1">Section</div>
+              </div>
 
-            {rows.map((row) => {
-              const isExpanded = expandedRow === row.id;
-              const hasIssues = (row.validation_exceptions?.length ?? 0) > 0;
+              {editableRows.map((row, index) => {
+                const isExpanded = expandedRow === row.id;
+                const hasIssues = (row.validation_exceptions?.length ?? 0) > 0;
 
-              return (
-                <div key={row.id} id={`row-${row.id}`} className="transition-all duration-500">
-                  <div
-                    className={`grid grid-cols-12 gap-4 px-5 py-4 items-center text-sm ${
-                      hasIssues ? "bg-red-50/40" : "hover:bg-slate-50/60"
-                    } transition-colors`}
-                  >
-                    {/* Expand toggle */}
-                    <div className="col-span-1">
-                      <button
-                        onClick={() =>
-                          setExpandedRow(isExpanded ? null : row.id)
-                        }
-                        className="text-slate-400 hover:text-slate-700"
-                      >
-                        {isExpanded ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </button>
+                return (
+                  <div key={row.id} id={`row-${row.id}`} className="transition-all duration-300">
+                    <div
+                      className={`grid grid-cols-12 gap-3 px-5 py-2.5 items-center text-xs border-l-4 ${
+                        hasIssues 
+                          ? "border-l-rose-500 bg-rose-50/10" 
+                          : "border-l-transparent hover:bg-slate-50/50"
+                      } transition-colors`}
+                    >
+                      {/* Actions */}
+                      <div className="col-span-1 flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => setExpandedRow(isExpanded ? null : row.id)}
+                          className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-700"
+                          title="View validation report details"
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRow(row.id)}
+                          className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors"
+                          title="Delete row"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Drawing Number */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.drawing_number}
+                          onChange={(e) => handleCellChange(row.id, "drawing_number", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-900"
+                        />
+                      </div>
+
+                      {/* Drawing Title */}
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          value={row.drawing_title || ""}
+                          onChange={(e) => handleCellChange(row.id, "drawing_title", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-800"
+                          placeholder="Title..."
+                        />
+                      </div>
+
+                      {/* BBS Numbers */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.bbs_numbers || ""}
+                          onChange={(e) => handleCellChange(row.id, "bbs_numbers", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-800"
+                          placeholder="BBS No..."
+                        />
+                      </div>
+
+                      {/* Total Weight */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.total_weight || ""}
+                          onChange={(e) => handleCellChange(row.id, "total_weight", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-semibold text-[11px] outline-none text-slate-800"
+                          placeholder="—"
+                        />
+                      </div>
+
+                      {/* Sheet */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.sheet_no || ""}
+                          onChange={(e) => handleCellChange(row.id, "sheet_no", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
+                          placeholder="e.g. 1 OF 8"
+                        />
+                      </div>
+
+                      {/* Dwg Rev */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.drawing_rev || ""}
+                          onChange={(e) => handleCellChange(row.id, "drawing_rev", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-700"
+                          placeholder="00"
+                        />
+                      </div>
+
+                      {/* BBS Rev */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.bbs_revs || ""}
+                          onChange={(e) => handleCellChange(row.id, "bbs_revs", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-700"
+                          placeholder="—"
+                        />
+                      </div>
+
+                      {/* Drawn By */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.drawn_by || ""}
+                          onChange={(e) => handleCellChange(row.id, "drawn_by", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
+                          placeholder="Drawn..."
+                        />
+                      </div>
+
+                      {/* Checked By */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.checked_by || ""}
+                          onChange={(e) => handleCellChange(row.id, "checked_by", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
+                          placeholder="Checked..."
+                        />
+                      </div>
+
+                      {/* Section */}
+                      <div className="col-span-1">
+                        <input
+                          type="text"
+                          value={row.section || ""}
+                          onChange={(e) => handleCellChange(row.id, "section", e.target.value)}
+                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
+                          placeholder="Section..."
+                        />
+                      </div>
                     </div>
 
-                    {/* Drawing Number */}
-                    <div className="col-span-3">
-                      <span className="font-mono font-semibold text-slate-800 text-xs">
-                        {row.drawing_number}
-                      </span>
-                    </div>
-
-                    {/* Drawing Rev */}
-                    <div className="col-span-1">
-                      <span className="font-mono text-slate-600 text-xs">
-                        {row.drawing_rev ?? "—"}
-                      </span>
-                    </div>
-
-                    {/* BBS Numbers */}
-                    <div className="col-span-3">
-                      <span className="font-mono font-semibold text-slate-800 text-xs">
-                        {row.bbs_numbers ?? "—"}
-                      </span>
-                    </div>
-
-                    {/* BBS Rev */}
-                    <div className="col-span-1">
-                      <span className="font-mono text-slate-600 text-xs">
-                        {row.bbs_revs ?? "—"}
-                      </span>
-                    </div>
-
-                    {/* Total Weight */}
-                    <div className="col-span-2 flex items-center gap-1">
-                      <Weight className="h-3 w-3 text-slate-400 shrink-0" />
-                      <span className="font-semibold text-slate-700 text-xs">
-                        {row.total_weight
-                          ? `${parseFloat(row.total_weight).toLocaleString()} kg`
-                          : "—"}
-                      </span>
-                    </div>
-
-                    {/* Issues badge */}
-                    <div className="col-span-1">
-                      {hasIssues ? (
-                        <span className="flex items-center gap-1 text-red-600">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          <span className="text-xs font-bold">
-                            {row.validation_exceptions.length}
-                          </span>
-                        </span>
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Expanded exceptions */}
-                  {isExpanded && (
-                    <div className="border-t border-slate-100 bg-slate-50 px-6 py-3">
-                      {row.remarks && (
-                        <p className="text-xs text-slate-500 mb-2">
-                          <span className="font-semibold">Remarks:</span>{" "}
-                          {row.remarks}
-                        </p>
-                      )}
-                      {hasIssues ? (
-                        <div className="space-y-2">
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            Row Validation Issues
-                          </p>
-                          {row.validation_exceptions.map((ex, i) => (
-                            <div
-                              key={i}
-                              className="flex items-start gap-2 text-xs"
-                            >
-                              <SeverityBadge severity={ex.severity} />
-                              <span className="text-slate-600">{ex.message}</span>
-                            </div>
-                          ))}
+                    {/* Expanded exceptions */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4 space-y-4">
+                        {/* Remarks Input */}
+                        <div className="flex flex-col gap-1.5 max-w-2xl">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remarks</label>
+                          <textarea
+                            value={row.remarks || ""}
+                            onChange={(e) => handleCellChange(row.id, "remarks", e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Add remarks for this register row..."
+                          />
                         </div>
-                      ) : (
-                        <p className="text-xs text-emerald-600 flex items-center gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          No issues for this row.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+
+                        {/* Mail No Input */}
+                        <div className="flex flex-col gap-1.5 max-w-sm">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Submittal Mail Number</label>
+                          <input
+                            type="text"
+                            value={row.mail_no || ""}
+                            onChange={(e) => handleCellChange(row.id, "mail_no", e.target.value)}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                            placeholder="Mail Number..."
+                          />
+                        </div>
+
+                        {/* Validation Exceptions List */}
+                        {hasIssues ? (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Row Validation Issues
+                            </p>
+                            {row.validation_exceptions?.map((ex, i) => (
+                              <div
+                                key={i}
+                                className="flex items-start gap-2 text-xs"
+                              >
+                                <SeverityBadge severity={ex.severity} />
+                                <span className="text-slate-600">{ex.message}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-emerald-600 flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            No issues detected for this row.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

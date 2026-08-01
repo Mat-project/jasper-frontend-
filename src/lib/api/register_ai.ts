@@ -44,12 +44,19 @@ export interface Relationship {
 export interface RegisterRow {
   id: string;
   drawing_number: string;
+  drawing_title: string | null;
   drawing_rev: string | null;
   bbs_numbers: string | null;
   bbs_revs: string | null;
   total_weight: string | null;
+  sheet_no: string | null;
+  drawn_by: string | null;
+  checked_by: string | null;
+  section: string | null;
+  mail_no: string | null;
   remarks: string | null;
-  validation_exceptions: { rule_name: string; severity: string; message: string }[];
+  validation_status?: string;
+  validation_exceptions?: { rule_name: string; severity: string; message: string }[];
 }
 
 export interface Register {
@@ -159,6 +166,22 @@ export async function getVersionComparison(
         to_version: toVersion,
       }
     }
+  );
+  return res.data;
+}
+
+/** Bulk save (update, create, delete) register rows */
+export async function bulkSaveRegisterRows(
+  projectId: string,
+  registerId: string,
+  data: {
+    upsert_rows: Partial<RegisterRow>[];
+    delete_row_ids: string[];
+  }
+): Promise<any> {
+  const res = await apiClient.post<any>(
+    `${BASE}/${projectId}/registers/${registerId}/rows/bulk-save/`,
+    data
   );
   return res.data;
 }

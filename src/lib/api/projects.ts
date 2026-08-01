@@ -10,6 +10,8 @@ export interface EnterpriseProject {
   status: string;
   budget: string;
   spent: string;
+  mail_number?: string;
+  mail_date?: string;
 }
 
 interface PaginatedResponse<T> {

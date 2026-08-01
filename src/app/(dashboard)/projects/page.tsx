@@ -32,6 +32,7 @@ export default function EnterpriseProjectsPage() {
   const [addForm, setAddForm] = useState({
     code: "", name: "", client: "",
     start_date: "2026-07-01", end_date: "2026-12-31",
+    mail_number: "", mail_date: "2026-08-01",
   });
 
   useEffect(() => {
@@ -74,7 +75,7 @@ export default function EnterpriseProjectsPage() {
       setProjects([newProj, ...projects]);
       setIsAddOpen(false);
       showToast("Project created successfully", "success");
-      setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", end_date: "2026-12-31" });
+      setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", end_date: "2026-12-31", mail_number: "", mail_date: "2026-08-01" });
     } catch (error: unknown) {
       const err = error as any;
       showToast(err.response?.data?.detail || "Failed to create project", "error");
@@ -285,6 +286,16 @@ export default function EnterpriseProjectsPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">End Date</label>
                   <input required type="date" value={addForm.end_date} onChange={(e) => setAddForm({ ...addForm, end_date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Mail Number</label>
+                  <input type="text" value={addForm.mail_number} onChange={(e) => setAddForm({ ...addForm, mail_number: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. ALEF-2026-140" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Mail Date</label>
+                  <input type="date" value={addForm.mail_date} onChange={(e) => setAddForm({ ...addForm, mail_date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
                 </div>
               </div>
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
