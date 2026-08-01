@@ -11,7 +11,7 @@ export interface EnterpriseProject {
   budget: string;
   spent: string;
   mail_number?: string;
-  mail_date?: string;
+  mail_cc?: string;
 }
 
 interface PaginatedResponse<T> {
