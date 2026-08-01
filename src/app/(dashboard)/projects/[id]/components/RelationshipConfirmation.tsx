@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import apiClient from "@/lib/api/client";
 import {
   CheckCircle2,
   XCircle,
@@ -26,6 +27,7 @@ import {
 interface RelationshipRecord {
   id: string;
   project?: string;
+  zip_package?: string | null;
   confidence_score: string;
   status: string;
   // Flat fields (Kausik's new schema)
@@ -159,6 +161,33 @@ export default function RelationshipConfirmation({
   const [actionError, setActionError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // Submissions (ZIP Batches)
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [selectedSubmission, setSelectedSubmission] = useState("");
+  const [loadingSubmissions, setLoadingSubmissions] = useState(true);
+
+  // ── Fetch Submissions ────────────────────────────────────────────────────────
+  const fetchSubmissions = useCallback(async () => {
+    setLoadingSubmissions(true);
+    try {
+      const res = await apiClient.get(`/api/v1/projects/${projectId}/submissions/`);
+      let data = res.data;
+      if (data && typeof data === 'object' && 'results' in data) {
+        data = data.results;
+      }
+      const submissionsArray = Array.isArray(data) ? data : [];
+      const sorted = submissionsArray.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setSubmissions(sorted);
+      if (sorted && sorted.length > 0) {
+        setSelectedSubmission(sorted[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to fetch submissions", err);
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  }, [projectId]);
+
   // ── Fetch relationships ──────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setFetchLoading(true);
@@ -178,18 +207,25 @@ export default function RelationshipConfirmation({
 
   useEffect(() => {
     fetchData();
+    fetchSubmissions();
     // Re-fetch when zip processing completes
-    const handleZipDone = () => fetchData();
+    const handleZipDone = () => {
+      fetchData();
+      fetchSubmissions();
+    };
     window.addEventListener("zip-processing-completed", handleZipDone);
     return () => window.removeEventListener("zip-processing-completed", handleZipDone);
-  }, [fetchData]);
+  }, [fetchData, fetchSubmissions]);
 
-  // ── Derived state ────────────────────────────────────────────────────────────
-  const pending = relationships.filter((r) => isPending(r.status));
-  const confirmed = relationships.filter((r) => r.status === "Confirmed");
-  const rejected = relationships.filter((r) => r.status === "Rejected");
+  // ── Derived state filtered by selected submission ───────────────────────────
+  const filteredRelationships = relationships.filter(
+    (r) => !selectedSubmission || r.zip_package === selectedSubmission
+  );
+  const pending = filteredRelationships.filter((r) => isPending(r.status));
+  const confirmed = filteredRelationships.filter((r) => r.status === "Confirmed");
+  const rejected = filteredRelationships.filter((r) => r.status === "Rejected");
   const highConf = pending.filter((r) => parseFloat(r.confidence_score) >= 0.9);
-  const allResolved = relationships.length > 0 && pending.length === 0;
+  const allResolved = filteredRelationships.length > 0 && pending.length === 0;
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const mutate = async (relId: string, action: "confirm" | "reject") => {
@@ -225,7 +261,7 @@ export default function RelationshipConfirmation({
     setGenerating(true);
     setActionError(null);
     try {
-      await generateRegister(projectId);
+      await generateRegister(projectId, selectedSubmission || undefined);
       onAllConfirmed?.();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Register generation failed.";
@@ -450,13 +486,30 @@ export default function RelationshipConfirmation({
             </div>
           )}
           <button
-            onClick={fetchData}
+            onClick={() => { fetchData(); fetchSubmissions(); }}
             title="Refresh"
             className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      {/* Submission Selector Dropdown */}
+      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-2">
+        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Submission (ZIP Batch)</label>
+        <select
+          value={selectedSubmission}
+          onChange={(e) => setSelectedSubmission(e.target.value)}
+          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm text-slate-800 font-medium transition-all shadow-sm outline-none cursor-pointer"
+        >
+          <option value="">-- All Submissions --</option>
+          {submissions.map((sub) => (
+            <option key={sub.id} value={sub.id}>
+              {sub.submission_no} - {sub.original_filename} ({new Date(sub.created_at).toLocaleDateString()})
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Action error */}
@@ -485,7 +538,15 @@ export default function RelationshipConfirmation({
       )}
 
       {/* Relationship list */}
-      <div className="space-y-3">{relationships.map(renderRow)}</div>
+      <div className="space-y-3">
+        {filteredRelationships.length > 0 ? (
+          filteredRelationships.map(renderRow)
+        ) : (
+          <div className="py-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
+            No relationships found for the selected submission.
+          </div>
+        )}
+      </div>
 
       {/* Generate Register CTA */}
       <div

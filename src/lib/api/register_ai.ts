@@ -50,11 +50,14 @@ export interface RegisterRow {
   bbs_revs: string | null;
   total_weight: string | null;
   sheet_no: string | null;
+  date?: string | null;
   drawn_by: string | null;
   checked_by: string | null;
   section: string | null;
   mail_no: string | null;
   remarks: string | null;
+  zip_package?: string | null;
+  dynamic_fields?: Record<string, any>;
   validation_status?: string;
   validation_exceptions?: { rule_name: string; severity: string; message: string }[];
 }
@@ -68,7 +71,7 @@ export interface Register {
   validation_report: {
     id: string;
     status: "Passed" | "Failed" | "Overridden";
-    exceptions: { id: string; rule_name: string; severity: string; message: string }[];
+    exceptions: { id: string; rule_name: string; severity: string; message: string; drawing_number?: string | null }[];
   } | null;
 }
 
@@ -119,9 +122,10 @@ export async function rejectRelationship(
 // ─── Register Generation ──────────────────────────────────────────────────────
 
 /** Trigger register generation after all relationships are confirmed */
-export async function generateRegister(projectId: string): Promise<Register> {
+export async function generateRegister(projectId: string, zipPackageId?: string): Promise<Register> {
   const res = await apiClient.post<Register>(
-    `${BASE}/${projectId}/registers/generate/`
+    `${BASE}/${projectId}/registers/generate/`,
+    zipPackageId ? { zip_package_id: zipPackageId } : {}
   );
   return res.data;
 }

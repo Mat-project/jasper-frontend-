@@ -17,8 +17,7 @@ import AIRegisterTab from "./components/AIRegisterTab";
 import RevisionManagementTab from "./components/RevisionManagementTab";
 import RelationshipConfirmation from "./components/RelationshipConfirmation";
 import RegisterReview from "./components/RegisterReview";
-// Commercial is disconnected but not removed from the codebase per client instruction
-// import CommercialTab from "./components/CommercialTab";
+import TransmittalTab from "./components/TransmittalTab";
 
 export default function ProjectDetailsPage() {
   const { id } = useParams() as { id: string };
@@ -28,12 +27,12 @@ export default function ProjectDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [register, setRegister] = useState<any | null>(null);
   const [rows, setRows] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"Extraction" | "Relationships" | "Review" | "Revisions">("Extraction");
+  const [activeTab, setActiveTab] = useState<"Extraction" | "Relationships" | "Review" | "Revisions" | "Transmittals">("Extraction");
 
   // Read search params for deep linking
   useEffect(() => {
     const tabParam = searchParams.get("tab") as any;
-    if (tabParam && ["Extraction", "Relationships", "Review", "Revisions"].includes(tabParam)) {
+    if (tabParam && ["Extraction", "Relationships", "Review", "Revisions", "Transmittals"].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -143,7 +142,8 @@ export default function ProjectDetailsPage() {
     { id: "Extraction", label: "Upload & Extract" },
     { id: "Relationships", label: "Pending Relationships" },
     { id: "Review", label: "Register Review" },
-    { id: "Revisions", label: "Revision History" }
+    { id: "Revisions", label: "Revision History" },
+    { id: "Transmittals", label: "Email Transmittals" }
   ] as const;
 
   return (
@@ -250,6 +250,7 @@ export default function ProjectDetailsPage() {
         ) : null}
         
         {activeTab === "Revisions" && <RevisionManagementTab projectId={project.id} />}
+        {activeTab === "Transmittals" && <TransmittalTab project={project} projectId={project.id} />}
       </div>
     </div>
   );

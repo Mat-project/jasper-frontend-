@@ -9,6 +9,10 @@ interface ComparisonData {
 }
 
 export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFrom: number, vTo: number }) => {
+  const added = data?.added || [];
+  const removed = data?.removed || [];
+  const modified = data?.modified || [];
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between pb-6 mb-8 border-b border-gray-100">
@@ -26,27 +30,27 @@ export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFr
           <div className="p-2 w-fit rounded-lg bg-emerald-50 text-emerald-600 mb-1">
             <FilePlus className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-bold text-gray-900">+{data.added.length}</div>
+          <div className="text-2xl font-bold text-gray-900">+{added.length}</div>
           <div className="text-sm font-medium text-slate-500">New Drawings</div>
         </div>
         <div className="p-5 rounded-xl bg-white border border-gray-200 shadow-sm flex flex-col gap-2">
           <div className="p-2 w-fit rounded-lg bg-red-50 text-red-600 mb-1">
             <FileMinus className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-bold text-gray-900">-{data.removed.length}</div>
+          <div className="text-2xl font-bold text-gray-900">-{removed.length}</div>
           <div className="text-sm font-medium text-slate-500">Removed Drawings</div>
         </div>
         <div className="p-5 rounded-xl bg-white border border-gray-200 shadow-sm flex flex-col gap-2">
           <div className="p-2 w-fit rounded-lg bg-amber-50 text-amber-600 mb-1">
             <FileEdit className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-bold text-gray-900">{data.modified.length}</div>
+          <div className="text-2xl font-bold text-gray-900">{modified.length}</div>
           <div className="text-sm font-medium text-slate-500">Updated Drawings</div>
         </div>
       </div>
 
       <div className="space-y-6">
-        {data.added.length > 0 && (
+        {added.length > 0 && (
           <div>
             <h3 className="text-sm font-bold text-emerald-700 mb-3 flex items-center gap-2">
               <FilePlus className="w-4 h-4"/> Added Drawings
@@ -60,7 +64,7 @@ export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFr
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {data.added.map(dwg => (
+                  {added.map(dwg => (
                     <tr key={dwg} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 font-medium text-gray-900">{dwg}</td>
                       <td className="px-4 py-3">
@@ -74,7 +78,7 @@ export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFr
           </div>
         )}
 
-        {data.modified.length > 0 && (
+        {modified.length > 0 && (
           <div>
             <h3 className="text-sm font-bold text-amber-700 mb-3 flex items-center gap-2">
               <FileEdit className="w-4 h-4"/> Updated Drawings
@@ -89,7 +93,7 @@ export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFr
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {data.modified.map(dwg => (
+                  {modified.map(dwg => (
                     <tr key={dwg.drawingNumber} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 font-medium text-gray-900">{dwg.drawingNumber}</td>
                       <td className="px-4 py-3">

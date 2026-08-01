@@ -42,8 +42,23 @@ export default function RevisionManagementTab({ projectId }: { projectId: string
       if (!activeVersion || activeVersion === 1) return;
       setComparing(true);
       try {
-        const data = await getVersionComparison(projectId, activeVersion - 1, activeVersion);
-        setComparisonData(data);
+        const rawData = await getVersionComparison(projectId, activeVersion - 1, activeVersion);
+        const items = rawData.items || [];
+        const added = items.filter((item: any) => item.change_type === 'Added').map((item: any) => item.drawing_number);
+        const removed = items.filter((item: any) => item.change_type === 'Removed').map((item: any) => item.drawing_number);
+        const modified = items
+          .filter((item: any) => item.change_type === 'Modified' || item.change_type === 'RevUpdated')
+          .map((item: any) => {
+            const details = item.details || {};
+            return {
+              drawingNumber: item.drawing_number,
+              oldWeight: details.oldWeight,
+              newWeight: details.newWeight,
+              oldRev: details.oldRev,
+              newRev: details.newRev
+            };
+          });
+        setComparisonData({ added, removed, modified });
       } catch (e) {
         console.error("Failed to load comparison", e);
         setComparisonData({ added: [], removed: [], modified: [] });

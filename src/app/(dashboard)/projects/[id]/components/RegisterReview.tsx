@@ -13,7 +13,8 @@ import {
   Plus,
   Trash2,
   Save,
-  Check
+  Check,
+  Download
 } from "lucide-react";
 import { Register, RegisterRow } from "@/lib/api/register_ai";
 
@@ -65,19 +66,111 @@ export default function RegisterReview({
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [showAllExceptions, setShowAllExceptions] = useState(false);
 
+  // Submissions (ZIP Batches) for filtering
+  const [selectedSubmission, setSelectedSubmission] = useState("");
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+
   // Sync with prop changes (e.g. initial load or post-save refetch)
   useEffect(() => {
     setEditableRows(rows);
     setDeletedIds([]);
   }, [rows]);
 
+  useEffect(() => {
+    async function fetchSubmissions() {
+      setLoadingSubmissions(true);
+      try {
+        const { default: apiClient } = await import("@/lib/api/client");
+        const res = await apiClient.get(`/api/v1/projects/${projectId}/submissions/`);
+        let data = res.data;
+        if (data && typeof data === 'object' && 'results' in data) {
+          data = data.results;
+        }
+        setSubmissions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load submissions in RegisterReview", err);
+      } finally {
+        setLoadingSubmissions(false);
+      }
+    }
+    fetchSubmissions();
+  }, [projectId]);
+
+  // visibleRows filtered by submission selector
+  const visibleRows = selectedSubmission
+    ? editableRows.filter(r => r.zip_package === selectedSubmission)
+    : editableRows;
+
   const allExceptions = register.validation_report?.exceptions ?? [];
-  const errors = allExceptions.filter(
+  
+  // Filter exceptions only to the ones belonging to the selected submission's drawings
+  const filteredExceptions = selectedSubmission
+    ? allExceptions.filter(ex => {
+        const subDwgNums = new Set(visibleRows.map(r => r.drawing_number));
+        return ex.drawing_number ? subDwgNums.has(ex.drawing_number) : false;
+      })
+    : allExceptions;
+
+  const errors = filteredExceptions.filter(
     (e) => e.severity === "Error" || e.severity === "Critical"
   );
-  const warnings = allExceptions.filter((e) => e.severity === "Warning");
+  const warnings = filteredExceptions.filter((e) => e.severity === "Warning");
   const validationStatus = register.validation_report?.status ?? "—";
-  const visibleExceptions = showAllExceptions ? allExceptions : allExceptions.slice(0, 3);
+  const visibleExceptions = showAllExceptions ? filteredExceptions : filteredExceptions.slice(0, 3);
+
+  const handleExportCSV = () => {
+    const headers = [
+      "Drawing Number",
+      "Drawing Title",
+      "BBS Number",
+      "Total Weight (kg)",
+      "Sheet No",
+      "Drawing Rev",
+      "BBS Rev",
+      "Drawn By",
+      "Checked By",
+      "Section",
+      "Remarks",
+      "Submission"
+    ];
+    
+    const subMap = new Map(submissions.map(s => [s.id, s.submission_no]));
+    
+    const csvRows = visibleRows.map(row => [
+      `"${(row.drawing_number || '').replace(/"/g, '""')}"`,
+      `"${(row.drawing_title || '').replace(/"/g, '""')}"`,
+      `"${(row.bbs_numbers || '').replace(/"/g, '""')}"`,
+      `"${row.total_weight ?? ''}"`,
+      `"${(row.sheet_no || '').replace(/"/g, '""')}"`,
+      `"${(row.drawing_rev || '').replace(/"/g, '""')}"`,
+      `"${(row.bbs_revs || '').replace(/"/g, '""')}"`,
+      `"${(row.drawn_by || '').replace(/"/g, '""')}"`,
+      `"${(row.checked_by || '').replace(/"/g, '""')}"`,
+      `"${(row.section || '').replace(/"/g, '""')}"`,
+      `"${(row.remarks || '').replace(/"/g, '""')}"`,
+      `"${subMap.get(row.zip_package || '') || 'Initial Submission'}"`
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...csvRows.map(e => e.join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    
+    const filename = selectedSubmission 
+      ? `JASPER_DOCUMENT_REGISTER_v${register.version_number}_${subMap.get(selectedSubmission) || 'SUB'}.csv`
+      : `JASPER_DOCUMENT_REGISTER_v${register.version_number}_Master.csv`;
+      
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Check if any row has changed or a new row has been added/deleted
   const getIsDirty = () => {
@@ -101,7 +194,8 @@ export default function RegisterReview({
         r.checked_by !== orig.checked_by ||
         r.section !== orig.section ||
         r.mail_no !== orig.mail_no ||
-        r.remarks !== orig.remarks
+        r.remarks !== orig.remarks ||
+        r.date !== orig.date
       ) {
         return true;
       }
@@ -121,6 +215,7 @@ export default function RegisterReview({
     const tempId = `temp-${Date.now()}`;
     const newRow: RegisterRow = {
       id: tempId,
+      zip_package: selectedSubmission || undefined,
       drawing_number: "NEW-DWG",
       drawing_title: "",
       drawing_rev: "00",
@@ -131,8 +226,10 @@ export default function RegisterReview({
       drawn_by: "",
       checked_by: "",
       section: "",
+      date: "",
       mail_no: "",
       remarks: "",
+      dynamic_fields: {},
       validation_exceptions: []
     };
     setEditableRows((prev) => [...prev, newRow]);
@@ -169,7 +266,8 @@ export default function RegisterReview({
           r.checked_by !== orig.checked_by ||
           r.section !== orig.section ||
           r.mail_no !== orig.mail_no ||
-          r.remarks !== orig.remarks
+          r.remarks !== orig.remarks ||
+          r.date !== orig.date
         );
       });
 
@@ -254,6 +352,14 @@ export default function RegisterReview({
               <Save className="h-4 w-4" />
             )}
             {isSaving ? "Saving..." : saveSuccess ? "Saved!" : "Save Changes"}
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 bg-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            title="Download cumulative register as Excel/CSV"
+          >
+            <Download className="h-4 w-4 text-emerald-600" />
+            Download Register (CSV)
           </button>
           <button
             onClick={onUploadNew}
@@ -374,20 +480,35 @@ export default function RegisterReview({
 
       {/* Register rows table (Excel Layout scrollable horizontally) */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-50 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3.5 bg-slate-50 border-b border-slate-200 gap-4">
           <div className="flex items-center gap-3">
             <FileSpreadsheet className="h-4 w-4 text-slate-500" />
             <p className="font-semibold text-slate-700 text-sm">Register Rows</p>
           </div>
-          <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
-            Interactive Sheet
-          </span>
+          <div className="flex items-center gap-3">
+            {/* Filter by Submission Select Dropdown */}
+            <select
+              value={selectedSubmission}
+              onChange={(e) => setSelectedSubmission(e.target.value)}
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-medium outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">-- All Submissions --</option>
+              {submissions.map((sub) => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.submission_no} - {sub.original_filename}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+              Interactive Sheet
+            </span>
+          </div>
         </div>
 
-        {editableRows.length === 0 ? (
+        {visibleRows.length === 0 ? (
           <div className="py-12 text-center text-slate-400">
             <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">No register rows found.</p>
+            <p className="text-sm font-medium">No register rows found for the selected view.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -407,7 +528,7 @@ export default function RegisterReview({
                 <div className="col-span-1">Section</div>
               </div>
 
-              {editableRows.map((row, index) => {
+              {visibleRows.map((row, index) => {
                 const isExpanded = expandedRow === row.id;
                 const hasIssues = (row.validation_exceptions?.length ?? 0) > 0;
 
@@ -555,8 +676,16 @@ export default function RegisterReview({
                     {/* Expanded exceptions */}
                     {isExpanded && (
                       <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4 space-y-4">
+                        {/* Extended Fields Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</label>
+                            <input type="date" value={row.date || ""} onChange={(e) => handleCellChange(row.id, "date", e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500" />
+                          </div>
+                        </div>
+
                         {/* Remarks Input */}
-                        <div className="flex flex-col gap-1.5 max-w-2xl">
+                        <div className="flex flex-col gap-1.5 max-w-4xl">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remarks</label>
                           <textarea
                             value={row.remarks || ""}
@@ -564,18 +693,6 @@ export default function RegisterReview({
                             rows={2}
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
                             placeholder="Add remarks for this register row..."
-                          />
-                        </div>
-
-                        {/* Mail No Input */}
-                        <div className="flex flex-col gap-1.5 max-w-sm">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Submittal Mail Number</label>
-                          <input
-                            type="text"
-                            value={row.mail_no || ""}
-                            onChange={(e) => handleCellChange(row.id, "mail_no", e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                            placeholder="Mail Number..."
                           />
                         </div>
 
