@@ -239,8 +239,8 @@ export default function RelationshipConfirmation({
       setRelationships((prev) =>
         prev.map((r) => (r.id === relId ? { ...r, status: updated.status } : r))
       );
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Action failed. Please try again.";
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.response?.data?.detail || e?.message || "Action failed. Please try again.";
       setActionError(msg);
     } finally {
       setActionLoading((p) => {
@@ -263,8 +263,8 @@ export default function RelationshipConfirmation({
     try {
       await generateRegister(projectId, selectedSubmission || undefined);
       onAllConfirmed?.();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Register generation failed.";
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.response?.data?.detail || e?.message || "Register generation failed.";
       setActionError(msg);
     } finally {
       setGenerating(false);
