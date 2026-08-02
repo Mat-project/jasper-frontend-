@@ -8,7 +8,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  MoreHorizontal,
+  X,
   Edit2,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
@@ -28,6 +28,7 @@ export default function ProjectDetailsPage() {
   const [register, setRegister] = useState<any | null>(null);
   const [rows, setRows] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"Extraction" | "Relationships" | "Review" | "Revisions" | "Transmittals">("Extraction");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Read search params for deep linking
   useEffect(() => {
@@ -188,11 +189,11 @@ export default function ProjectDetailsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="px-4 py-2 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+            >
               <Edit2 className="h-4 w-4" /> Edit Project
-            </button>
-            <button className="p-2 border border-gray-200 hover:bg-gray-100 rounded-lg transition-colors text-slate-500">
-              <MoreHorizontal className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -251,6 +252,212 @@ export default function ProjectDetailsPage() {
         
         {activeTab === "Revisions" && <RevisionManagementTab projectId={project.id} />}
         {activeTab === "Transmittals" && <TransmittalTab project={project} projectId={project.id} />}
+      </div>
+
+      {/* Edit Project Modal */}
+      {project && (
+        <EditProjectModal
+          project={project}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={(updated) => setProject(updated)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface EditProjectModalProps {
+  project: any;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (updatedProject: any) => void;
+}
+
+function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModalProps) {
+  const [name, setName] = useState(project.name || "");
+  const [code, setCode] = useState(project.code || "");
+  const [client, setClient] = useState(project.client || "");
+  const [status, setStatus] = useState(project.status || "Active");
+  const [priority, setPriority] = useState(project.priority || "Low");
+  const [startDate, setStartDate] = useState(project.start_date || "");
+  const [endDate, setEndDate] = useState(project.end_date || "");
+  const [mailCc, setMailCc] = useState(project.mail_cc || "");
+  const [mailNumber, setMailNumber] = useState(project.mail_number || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const { default: apiClient } = await import("@/lib/api/client");
+      const res = await apiClient.patch(`/api/v1/projects/${project.id}/`, {
+        name,
+        code,
+        client,
+        status,
+        priority,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        mail_cc: mailCc,
+        mail_number: mailNumber
+      });
+      onSave(res.data);
+      onClose();
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.detail || "Failed to update project. Check fields.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-100 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <h3 className="font-bold text-slate-800 text-lg">Edit Project Details</h3>
+          <button type="button" onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Project Name *</label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Project Code *</label>
+              <input
+                type="text"
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Client Name *</label>
+              <input
+                type="text"
+                required
+                value={client}
+                onChange={(e) => setClient(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+              >
+                <option value="Active">Active</option>
+                <option value="On Hold">On Hold</option>
+                <option value="Completed">Completed</option>
+                <option value="At Risk">At Risk</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Mail CC List (Comma separated)</label>
+              <input
+                type="text"
+                value={mailCc}
+                onChange={(e) => setMailCc(e.target.value)}
+                placeholder="e.g. mathan@email.com, check@email.com"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Mail Number (Fixed Ref Prefix)</label>
+              <input
+                type="text"
+                value={mailNumber}
+                onChange={(e) => setMailNumber(e.target.value)}
+                placeholder="e.g. MAIL-001"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Footer Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-sm"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
