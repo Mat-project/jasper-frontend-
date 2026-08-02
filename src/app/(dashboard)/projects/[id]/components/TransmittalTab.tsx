@@ -170,10 +170,14 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
     try {
       // Get all registers for this project
       const regRes = await apiClient.get(`/api/v1/projects/${projectId}/registers/`);
-      const registers = regRes.data;
-      if (registers && registers.length > 0) {
+      let registers = regRes.data;
+      if (registers && typeof registers === 'object' && 'results' in registers) {
+        registers = registers.results;
+      }
+      const registersArray = Array.isArray(registers) ? registers : [];
+      if (registersArray.length > 0) {
         // Find active register, or fallback to the latest draft
-        const activeReg = registers.find((r: any) => r.status === "Active") || registers[0];
+        const activeReg = registersArray.find((r: any) => r.status === "Active") || registersArray[0];
         setActiveRegVersion(activeReg.version_number.toString());
         
         // Get rows for this register
