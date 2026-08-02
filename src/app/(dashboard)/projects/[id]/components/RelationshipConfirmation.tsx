@@ -225,7 +225,7 @@ export default function RelationshipConfirmation({
   const confirmed = filteredRelationships.filter((r) => r.status === "Confirmed");
   const rejected = filteredRelationships.filter((r) => r.status === "Rejected");
   const highConf = pending.filter((r) => parseFloat(r.confidence_score) >= 0.9);
-  const allResolved = filteredRelationships.length > 0 && pending.length === 0;
+  const allResolved = pending.length === 0;
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const mutate = async (relId: string, action: "confirm" | "reject") => {
@@ -557,9 +557,11 @@ export default function RelationshipConfirmation({
         <div>
           <p className="text-sm font-semibold text-slate-700">Ready to generate the Register?</p>
           <p className="text-xs text-slate-400 mt-0.5">
-            {allResolved
-              ? "All relationships have been reviewed. Click to compile the Register."
-              : `${pending.length} relationship(s) still pending. Resolve all before generating.`}
+            {pending.length > 0
+              ? `${pending.length} relationship(s) still pending. Resolve all before generating.`
+              : filteredRelationships.length === 0
+              ? "No relationships proposed. Generate the register anyway to manually input drawings for this submission."
+              : "All relationships have been reviewed. Click to compile the Register."}
           </p>
         </div>
         <button

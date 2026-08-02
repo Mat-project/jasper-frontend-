@@ -321,6 +321,32 @@ Jasper Detailing Services`;
     showToast("Downloaded document register as CSV successfully!", "success");
   };
 
+  const handleExportHistoryCSV = () => {
+    if (history.length === 0) {
+      showToast("No transmittal records found to export.", "error");
+      return;
+    }
+    const headers = ["Date Sent", "Subject", "To", "Cc", "Recipient Company", "Status"];
+    const csvRows = history.map(item => [
+      `"${new Date(item.dateSent).toLocaleString()}"`,
+      `"${(item.subject || '').replace(/"/g, '""')}"`,
+      `"${(item.to || '').replace(/"/g, '""')}"`,
+      `"${(item.cc || '').replace(/"/g, '""')}"`,
+      `"${(item.companyName || '').replace(/"/g, '""')}"`,
+      `"${item.status}"`
+    ]);
+    const csvContent = [headers.join(","), ...csvRows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `PROJECT_TRANSMITTAL_DISPATCH_REPORT.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Downloaded transmittal history report as CSV successfully!", "success");
+  };
+
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContactName.trim() || !newContactEmails.trim()) {
@@ -804,9 +830,22 @@ Jasper Detailing Services`;
             <History className="w-4.5 h-4.5 text-slate-500" />
             <h3 className="font-semibold text-slate-800">Transmittal Dispatch History</h3>
           </div>
-          <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full font-medium">
-            {history.length} Record{history.length !== 1 ? "s" : ""}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full font-medium">
+              {history.length} Record{history.length !== 1 ? "s" : ""}
+            </span>
+            {history.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportHistoryCSV}
+                className="flex items-center gap-1.5 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold transition"
+                title="Download full history report as CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                Export Report (CSV)
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
