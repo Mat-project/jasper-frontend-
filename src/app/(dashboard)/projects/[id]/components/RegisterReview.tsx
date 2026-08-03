@@ -16,7 +16,7 @@ import {
   Check,
   Download
 } from "lucide-react";
-import { Register, RegisterRow } from "@/lib/api/register_ai";
+import { Register, RegisterRow, updateWorkspace } from "@/lib/api/register_ai";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,12 +52,14 @@ export default function RegisterReview({
   rows,
   onUploadNew,
   onSaveSuccess,
+  activeSubmissionId,
 }: {
   projectId: string;
   register: Register;
   rows: RegisterRow[];
   onUploadNew: () => void;
   onSaveSuccess?: () => void;
+  activeSubmissionId: string;
 }) {
   const [editableRows, setEditableRows] = useState<RegisterRow[]>([]);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
@@ -76,6 +78,12 @@ export default function RegisterReview({
     setEditableRows(rows);
     setDeletedIds([]);
   }, [rows]);
+
+  useEffect(() => {
+    if (activeSubmissionId && !selectedSubmission) {
+      setSelectedSubmission(activeSubmissionId);
+    }
+  }, [activeSubmissionId]);
 
   useEffect(() => {
     async function fetchSubmissions() {
@@ -97,10 +105,24 @@ export default function RegisterReview({
     fetchSubmissions();
   }, [projectId]);
 
+  // Update workspace current_stage to "Review" on mount
+  useEffect(() => {
+    async function updateWorkspaceStage() {
+      try {
+        await updateWorkspace(projectId, { current_stage: "Review" });
+      } catch (error) {
+        console.error("Failed to update workspace stage:", error);
+      }
+    }
+    updateWorkspaceStage();
+  }, [projectId]);
+
   // visibleRows filtered by submission selector
   const visibleRows = selectedSubmission
     ? editableRows.filter(r => r.zip_package === selectedSubmission)
     : editableRows;
+
+  const isReadOnly = selectedSubmission !== activeSubmissionId;
 
   const allExceptions = register.validation_report?.exceptions ?? [];
   
@@ -328,31 +350,35 @@ export default function RegisterReview({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleAddRow}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 bg-white rounded-lg text-sm font-semibold transition-colors"
-          >
-            <Plus className="h-4 w-4 text-blue-600" />
-            Add Row
-          </button>
-          <button
-            onClick={handleSaveChanges}
-            disabled={!isDirty || isSaving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ${
-              isDirty
-                ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-            }`}
-          >
-            {isSaving ? (
-              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : saveSuccess ? (
-              <Check className="h-4 w-4 text-white" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            {isSaving ? "Saving..." : saveSuccess ? "Saved!" : "Save Changes"}
-          </button>
+          {!isReadOnly && (
+            <>
+              <button
+                onClick={handleAddRow}
+                className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 bg-white rounded-lg text-sm font-semibold transition-colors"
+              >
+                <Plus className="h-4 w-4 text-blue-600" />
+                Add Row
+              </button>
+              <button
+                onClick={handleSaveChanges}
+                disabled={!isDirty || isSaving}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ${
+                  isDirty
+                    ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                }`}
+              >
+                {isSaving ? (
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : saveSuccess ? (
+                  <Check className="h-4 w-4 text-white" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {isSaving ? "Saving..." : saveSuccess ? "Saved!" : "Save Changes"}
+              </button>
+            </>
+          )}
           <button
             onClick={handleExportCSV}
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 bg-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
@@ -361,15 +387,29 @@ export default function RegisterReview({
             <Download className="h-4 w-4 text-emerald-600" />
             Download Register (CSV)
           </button>
-          <button
-            onClick={onUploadNew}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Upload New Revision
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={onUploadNew}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold transition-colors"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Upload New Revision
+            </button>
+          )}
         </div>
       </div>
+
+      {isReadOnly && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3 shadow-sm">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm">Archived Submission [Read-Only]</p>
+            <p className="text-xs text-amber-700 mt-1">
+              You are viewing a historical submission. Edits, additions, and deletions are disabled. To make modifications, select today&apos;s active workspace submission from the dropdown.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-4">
@@ -554,13 +594,15 @@ export default function RegisterReview({
                             <ChevronDown className="h-4 w-4" />
                           )}
                         </button>
-                        <button
-                          onClick={() => handleDeleteRow(row.id)}
-                          className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors"
-                          title="Delete row"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {!isReadOnly && (
+                          <button
+                            onClick={() => handleDeleteRow(row.id)}
+                            className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors"
+                            title="Delete row"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Drawing Number */}
@@ -570,6 +612,7 @@ export default function RegisterReview({
                           value={row.drawing_number}
                           onChange={(e) => handleCellChange(row.id, "drawing_number", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-900"
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -581,6 +624,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "drawing_title", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-800"
                           placeholder="Title..."
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -592,6 +636,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "bbs_numbers", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-800"
                           placeholder="BBS No..."
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -603,6 +648,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "total_weight", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-semibold text-[11px] outline-none text-slate-800"
                           placeholder="—"
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -614,6 +660,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "sheet_no", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
                           placeholder="e.g. 1 OF 8"
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -625,6 +672,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "drawing_rev", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-700"
                           placeholder="00"
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -636,6 +684,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "bbs_revs", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-700"
                           placeholder="—"
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -647,6 +696,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "drawn_by", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
                           placeholder="Drawn..."
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -658,6 +708,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "checked_by", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
                           placeholder="Checked..."
+                          disabled={isReadOnly}
                         />
                       </div>
 
@@ -669,6 +720,7 @@ export default function RegisterReview({
                           onChange={(e) => handleCellChange(row.id, "section", e.target.value)}
                           className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-700"
                           placeholder="Section..."
+                          disabled={isReadOnly}
                         />
                       </div>
                     </div>
@@ -680,7 +732,7 @@ export default function RegisterReview({
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl">
                           <div className="flex flex-col gap-1.5">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</label>
-                            <input type="date" value={row.date || ""} onChange={(e) => handleCellChange(row.id, "date", e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500" />
+                            <input type="date" value={row.date || ""} onChange={(e) => handleCellChange(row.id, "date", e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500" disabled={isReadOnly} />
                           </div>
                         </div>
 
@@ -693,6 +745,7 @@ export default function RegisterReview({
                             rows={2}
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
                             placeholder="Add remarks for this register row..."
+                            disabled={isReadOnly}
                           />
                         </div>
 

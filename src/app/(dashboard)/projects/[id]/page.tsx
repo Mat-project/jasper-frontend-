@@ -12,6 +12,7 @@ import {
   Edit2,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
+import { getWorkspace } from "@/lib/api/register_ai";
 import { cn } from "@/lib/utils";
 import AIRegisterTab from "./components/AIRegisterTab";
 import RevisionManagementTab from "./components/RevisionManagementTab";
@@ -27,6 +28,7 @@ export default function ProjectDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [register, setRegister] = useState<any | null>(null);
   const [rows, setRows] = useState<any[]>([]);
+  const [workspace, setWorkspace] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"Extraction" | "Relationships" | "Review" | "Revisions" | "Transmittals">("Extraction");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -50,9 +52,9 @@ export default function ProjectDetailsPage() {
         const registerRows = await getRegisterRows(id, activeReg.id);
         setRows(registerRows ?? []);
         
-        // Deep linking to specific row
-        const rowId = searchParams.get("row");
-        if (rowId && activeTab === "Review") {
+        // Deep linking to specific row — read URL directly (not via hook) to avoid dep loop
+        const rowId = new URLSearchParams(window.location.search).get("row");
+        if (rowId) {
           setTimeout(() => {
             const el = document.getElementById(`row-${rowId}`);
             if (el) {
@@ -60,13 +62,14 @@ export default function ProjectDetailsPage() {
               el.classList.add('ring-2', 'ring-blue-400', 'bg-blue-50/50');
               setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-50/50'), 3000);
             }
-          }, 500); // Give React time to render the table
+          }, 500);
         }
       }
     } catch (error) {
       console.error("Failed to load register data", error);
     }
-  }, [id, searchParams, activeTab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]); // IMPORTANT: activeTab and searchParams intentionally excluded — adding them causes re-fetch on every tab switch
 
   useEffect(() => {
     async function loadProject() {
@@ -84,6 +87,19 @@ export default function ProjectDetailsPage() {
   }, [id]);
 
   useEffect(() => {
+    if (!id) return;
+    async function loadWorkspace() {
+      try {
+        const ws = await getWorkspace(id);
+        setWorkspace(ws);
+      } catch (error) {
+        console.error("Failed to load workspace", error);
+      }
+    }
+    loadWorkspace();
+  }, [id]);
+
+  useEffect(() => {
     if (project) {
       fetchRegisterData();
     }
@@ -95,7 +111,8 @@ export default function ProjectDetailsPage() {
     };
     window.addEventListener("zip-processing-completed", handleZipCompleted);
     return () => window.removeEventListener("zip-processing-completed", handleZipCompleted);
-  }, [project, fetchRegisterData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id]); // IMPORTANT: fetchRegisterData excluded — its identity changes with activeTab, causing infinite loop
 
   if (loading) {
     return (
@@ -243,6 +260,7 @@ export default function ProjectDetailsPage() {
               setActiveTab("Revisions");
             }}
             onSaveSuccess={fetchRegisterData}
+            activeSubmissionId={workspace?.active_submission ?? ""}
           />
         ) : activeTab === "Review" ? (
           <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-border">

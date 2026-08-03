@@ -4,10 +4,14 @@ import React, { useState, useEffect, useRef } from "react";
 import UploadZIP from "./UploadZIP";
 import ProcessingStatus from "./ProcessingStatus";
 import { getAccessToken } from "@/lib/api/client";
+import { getWorkspace, updateWorkspace, WorkspaceContext } from "@/lib/api/register_ai";
+import { NewerSubmissionModal } from "@/components/NewerSubmissionModal";
 
 export default function AIRegisterTab({ project }: { project: any }) {
   const [jobState, setJobState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [workspace, setWorkspace] = useState<WorkspaceContext | null>(null);
+  const [showNewerSubmissionModal, setShowNewerSubmissionModal] = useState(false);
   const prevJobState = useRef<any>(null);
 
   useEffect(() => {
@@ -38,16 +42,47 @@ export default function AIRegisterTab({ project }: { project: any }) {
       }
     } catch (e) {
       console.error(e);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const loadWorkspace = async () => {
+    try {
+      const ws = await getWorkspace(project.id);
+      setWorkspace(ws);
+      
+      // Show modal if newer submission available
+      if (ws.newer_submission_available) {
+        setShowNewerSubmissionModal(true);
+      }
+    } catch (error) {
+      console.error("Failed to load workspace:", error);
+    }
+  };
+
+  const handleProcessingStarted = async () => {
+    try {
+      await updateWorkspace(project.id, {
+        current_stage: "Relationship",
+      });
+      await loadWorkspace();
+    } catch (error) {
+      console.error("Failed to update workspace:", error);
     }
   };
 
   useEffect(() => {
-    fetchStatus();
+    const initializeTab = async () => {
+      await fetchStatus();
+      await loadWorkspace();
+      setLoading(false);
+    };
+
+    initializeTab();
+
     const interval = setInterval(() => {
       fetchStatus();
     }, 3000);
+
     return () => clearInterval(interval);
   }, [project.id]);
 
@@ -72,7 +107,26 @@ export default function AIRegisterTab({ project }: { project: any }) {
       {isProcessing ? (
         <ProcessingStatus jobState={jobState} />
       ) : (
-        <UploadZIP project={project} onUploadSuccess={() => fetchStatus()} lastJob={jobState} />
+        <UploadZIP 
+          project={project} 
+          onUploadSuccess={() => {
+            fetchStatus();
+            handleProcessingStarted();
+          }} 
+          lastJob={jobState} 
+        />
+      )}
+
+      {workspace && (
+        <NewerSubmissionModal
+          isOpen={showNewerSubmissionModal}
+          workspace={workspace}
+          onClose={() => setShowNewerSubmissionModal(false)}
+          onSwitch={() => {
+            loadWorkspace();
+            fetchStatus();
+          }}
+        />
       )}
     </div>
   );

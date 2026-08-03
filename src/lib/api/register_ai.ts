@@ -84,6 +84,31 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
+export interface WorkspaceContext {
+  id: string;
+  user: string;
+  project: string;
+  active_submission: string | null;
+  submission_no: string | null;
+  current_stage: "Relationship" | "Review" | "Transmittal" | "Revisions";
+  newer_submission_available: boolean;
+  latest_submission_id: string | null;
+  latest_submission_no: string | null;
+  updated_at: string;
+}
+
+export interface RegisterNotification {
+  id: string;
+  user: string;
+  project: string;
+  title: string;
+  message: string;
+  status: "Unread" | "Read";
+  action_type: string;
+  action_id: string;
+  created_at: string;
+}
+
 // ─── Relationships ────────────────────────────────────────────────────────────
 
 /** Fetch all proposed relationships for a project */
@@ -186,6 +211,56 @@ export async function bulkSaveRegisterRows(
   const res = await apiClient.post<any>(
     `${BASE}/${projectId}/registers/${registerId}/rows/bulk-save/`,
     data
+  );
+  return res.data;
+}
+
+/** Get workspace context for user in a project */
+export async function getWorkspace(
+  projectId: string
+): Promise<WorkspaceContext> {
+  const res = await apiClient.get<WorkspaceContext>(
+    `${BASE}/${projectId}/workspace/`
+  );
+  return res.data;
+}
+
+/** Update workspace context (active submission, current stage) */
+export async function updateWorkspace(
+  projectId: string,
+  data: {
+    active_submission_id?: string | null;
+    current_stage?: string;
+  }
+): Promise<WorkspaceContext> {
+  const res = await apiClient.post<WorkspaceContext>(
+    `${BASE}/${projectId}/workspace/`,
+    data
+  );
+  return res.data;
+}
+
+/** Get notifications for a project */
+export async function getProjectNotifications(
+  projectId: string
+): Promise<RegisterNotification[]> {
+  const res = await apiClient.get<any>(
+    `${BASE}/${projectId}/notifications/`
+  );
+  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
+    return res.data.results;
+  }
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+/** Mark notification as read */
+export async function markNotificationRead(
+  projectId: string,
+  notificationId: string
+): Promise<RegisterNotification> {
+  const res = await apiClient.patch<RegisterNotification>(
+    `${BASE}/${projectId}/notifications/${notificationId}/`,
+    { status: "Read" }
   );
   return res.data;
 }

@@ -19,6 +19,7 @@ import {
   confirmRelationship,
   rejectRelationship,
   generateRegister,
+  updateWorkspace,
 } from "@/lib/api/register_ai";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -216,6 +217,18 @@ export default function RelationshipConfirmation({
     window.addEventListener("zip-processing-completed", handleZipDone);
     return () => window.removeEventListener("zip-processing-completed", handleZipDone);
   }, [fetchData, fetchSubmissions]);
+
+  // Update workspace current_stage to "Relationship" on mount
+  useEffect(() => {
+    async function updateWorkspaceStage() {
+      try {
+        await updateWorkspace(projectId, { current_stage: "Relationship" });
+      } catch (error) {
+        console.error("Failed to update workspace stage:", error);
+      }
+    }
+    updateWorkspaceStage();
+  }, [projectId]);
 
   // ── Derived state filtered by selected submission ───────────────────────────
   const filteredRelationships = relationships.filter(
