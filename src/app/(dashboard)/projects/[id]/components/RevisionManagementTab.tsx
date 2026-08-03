@@ -4,6 +4,7 @@ import { RevisionTimeline } from './RevisionTimeline';
 import { ComparisonView } from './ComparisonView';
 import { getRegisters, getVersionComparison } from '@/lib/api/register_ai';
 import { Loader2 } from 'lucide-react';
+import ActiveSubmissionBanner from './ActiveSubmissionBanner';
 
 export default function RevisionManagementTab({ projectId }: { projectId: string }) {
   const [activeVersion, setActiveVersion] = useState<number | null>(null);
@@ -86,8 +87,10 @@ export default function RevisionManagementTab({ projectId }: { projectId: string
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 h-[800px] bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-      
+    <div className="space-y-4">
+      <ActiveSubmissionBanner />
+      <div className="flex flex-col md:flex-row gap-6 h-[800px] bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+
       {/* Sidebar: Timeline */}
       <aside className="w-full md:w-80 flex flex-col gap-4 border-r border-gray-100 pr-6">
         <RevisionTimeline 
@@ -111,14 +114,15 @@ export default function RevisionManagementTab({ projectId }: { projectId: string
             <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
           </div>
         ) : (
-          <ComparisonView 
-            data={comparisonData || { added: [], removed: [], modified: [] }} 
-            vFrom={(activeVersion || 2) - 1} 
-            vTo={activeVersion || 2} 
+          <ComparisonView
+            data={comparisonData || { added: [], removed: [], modified: [] }}
+            vFrom={(activeVersion || 2) - 1}
+            vTo={activeVersion || 2}
           />
         )}
       </main>
 
+      </div>
     </div>
   );
 }

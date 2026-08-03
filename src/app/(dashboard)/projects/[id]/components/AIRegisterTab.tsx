@@ -3,16 +3,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import UploadZIP from "./UploadZIP";
 import ProcessingStatus from "./ProcessingStatus";
+import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { getAccessToken } from "@/lib/api/client";
-import { getWorkspace, updateWorkspace, WorkspaceContext } from "@/lib/api/register_ai";
-import { NewerSubmissionModal } from "@/components/NewerSubmissionModal";
+import { useProjectWorkspace } from "../WorkspaceProvider";
 
 export default function AIRegisterTab({ project }: { project: any }) {
   const [jobState, setJobState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [workspace, setWorkspace] = useState<WorkspaceContext | null>(null);
-  const [showNewerSubmissionModal, setShowNewerSubmissionModal] = useState(false);
   const prevJobState = useRef<any>(null);
+
+  // Shared workspace context — single source of truth for the active
+  // submission across all Register AI tabs. The provider loads it once.
+  const { workspace } = useProjectWorkspace();
 
   useEffect(() => {
     if (
@@ -21,6 +23,9 @@ export default function AIRegisterTab({ project }: { project: any }) {
       jobState &&
       jobState.job_state === "Completed"
     ) {
+      // Notify the rest of the page (WorkspaceProvider + page-level handler)
+      // that a ZIP has finished processing. The backend has already set the
+      // new submission as active; listeners will refresh workspace state.
       window.dispatchEvent(new Event("zip-processing-completed"));
     }
     prevJobState.current = jobState;
@@ -45,35 +50,9 @@ export default function AIRegisterTab({ project }: { project: any }) {
     }
   };
 
-  const loadWorkspace = async () => {
-    try {
-      const ws = await getWorkspace(project.id);
-      setWorkspace(ws);
-      
-      // Show modal if newer submission available
-      if (ws.newer_submission_available) {
-        setShowNewerSubmissionModal(true);
-      }
-    } catch (error) {
-      console.error("Failed to load workspace:", error);
-    }
-  };
-
-  const handleProcessingStarted = async () => {
-    try {
-      await updateWorkspace(project.id, {
-        current_stage: "Relationship",
-      });
-      await loadWorkspace();
-    } catch (error) {
-      console.error("Failed to update workspace:", error);
-    }
-  };
-
   useEffect(() => {
     const initializeTab = async () => {
       await fetchStatus();
-      await loadWorkspace();
       setLoading(false);
     };
 
@@ -98,36 +77,28 @@ export default function AIRegisterTab({ project }: { project: any }) {
   const isProcessing = jobState && !["Completed", "Failed"].includes(jobState.job_state);
 
   return (
-    <div className="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="mb-6 border-b border-gray-100 pb-4">
-        <h2 className="text-xl font-bold text-gray-900">AI Register Automation</h2>
-        <p className="text-slate-500 text-sm mt-1">Upload a ZIP package containing engineering drawings and BBS for automated processing.</p>
+    <div className="space-y-4">
+      {/* Active Submission banner — shared across all tabs */}
+      <ActiveSubmissionBanner />
+
+      <div className="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="mb-6 border-b border-gray-100 pb-4">
+          <h2 className="text-xl font-bold text-gray-900">AI Register Automation</h2>
+          <p className="text-slate-500 text-sm mt-1">Upload a ZIP package containing engineering drawings and BBS for automated processing.</p>
+        </div>
+
+        {isProcessing ? (
+          <ProcessingStatus jobState={jobState} />
+        ) : (
+          <UploadZIP
+            project={project}
+            onUploadSuccess={() => {
+              fetchStatus();
+            }}
+            lastJob={jobState}
+          />
+        )}
       </div>
-
-      {isProcessing ? (
-        <ProcessingStatus jobState={jobState} />
-      ) : (
-        <UploadZIP 
-          project={project} 
-          onUploadSuccess={() => {
-            fetchStatus();
-            handleProcessingStarted();
-          }} 
-          lastJob={jobState} 
-        />
-      )}
-
-      {workspace && (
-        <NewerSubmissionModal
-          isOpen={showNewerSubmissionModal}
-          workspace={workspace}
-          onClose={() => setShowNewerSubmissionModal(false)}
-          onSwitch={() => {
-            loadWorkspace();
-            fetchStatus();
-          }}
-        />
-      )}
     </div>
   );
 }

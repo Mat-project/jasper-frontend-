@@ -12,64 +12,19 @@ import {
   Edit2,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
-import { getWorkspace } from "@/lib/api/register_ai";
 import { cn } from "@/lib/utils";
 import AIRegisterTab from "./components/AIRegisterTab";
 import RevisionManagementTab from "./components/RevisionManagementTab";
 import RelationshipConfirmation from "./components/RelationshipConfirmation";
 import RegisterReview from "./components/RegisterReview";
 import TransmittalTab from "./components/TransmittalTab";
+import { WorkspaceProvider, useProjectWorkspace } from "./WorkspaceProvider";
 
 export default function ProjectDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [register, setRegister] = useState<any | null>(null);
-  const [rows, setRows] = useState<any[]>([]);
-  const [workspace, setWorkspace] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"Extraction" | "Relationships" | "Review" | "Revisions" | "Transmittals">("Extraction");
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  // Read search params for deep linking
-  useEffect(() => {
-    const tabParam = searchParams.get("tab") as any;
-    if (tabParam && ["Extraction", "Relationships", "Review", "Revisions", "Transmittals"].includes(tabParam)) {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams]);
-
-  const fetchRegisterData = React.useCallback(async () => {
-    if (!id) return;
-    try {
-      const { getRegisters, getRegisterRows } = await import("@/lib/api/register_ai");
-      const regs = await getRegisters(id);
-      if (regs && regs.length > 0) {
-        const activeReg = regs[0];
-        setRegister(activeReg);
-        // Rows are fetched separately — not embedded in the Register object
-        const registerRows = await getRegisterRows(id, activeReg.id);
-        setRows(registerRows ?? []);
-        
-        // Deep linking to specific row — read URL directly (not via hook) to avoid dep loop
-        const rowId = new URLSearchParams(window.location.search).get("row");
-        if (rowId) {
-          setTimeout(() => {
-            const el = document.getElementById(`row-${rowId}`);
-            if (el) {
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              el.classList.add('ring-2', 'ring-blue-400', 'bg-blue-50/50');
-              setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-50/50'), 3000);
-            }
-          }, 500);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load register data", error);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]); // IMPORTANT: activeTab and searchParams intentionally excluded — adding them causes re-fetch on every tab switch
 
   useEffect(() => {
     async function loadProject() {
@@ -85,34 +40,6 @@ export default function ProjectDetailsPage() {
     }
     loadProject();
   }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-    async function loadWorkspace() {
-      try {
-        const ws = await getWorkspace(id);
-        setWorkspace(ws);
-      } catch (error) {
-        console.error("Failed to load workspace", error);
-      }
-    }
-    loadWorkspace();
-  }, [id]);
-
-  useEffect(() => {
-    if (project) {
-      fetchRegisterData();
-    }
-    
-    // Listen for completion events from AIRegisterTab
-    const handleZipCompleted = () => {
-      fetchRegisterData();
-      setActiveTab("Relationships"); // Auto-switch to relationships when extraction finishes
-    };
-    window.addEventListener("zip-processing-completed", handleZipCompleted);
-    return () => window.removeEventListener("zip-processing-completed", handleZipCompleted);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id]); // IMPORTANT: fetchRegisterData excluded — its identity changes with activeTab, causing infinite loop
 
   if (loading) {
     return (
@@ -135,6 +62,95 @@ export default function ProjectDetailsPage() {
       </div>
     );
   }
+
+  // WorkspaceProvider is mounted only after the project is known, so each
+  // project gets its own isolated workspace instance (multi-project isolation).
+  return (
+    <WorkspaceProvider projectId={id}>
+      <ProjectDetailsContent
+        project={project}
+        onProjectUpdated={setProject}
+      />
+    </WorkspaceProvider>
+  );
+}
+
+function ProjectDetailsContent({
+  project,
+  onProjectUpdated,
+}: {
+  project: any;
+  onProjectUpdated: (updated: any) => void;
+}) {
+  const { id } = useParams() as { id: string };
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { activeSubmissionId, refreshWorkspace } = useProjectWorkspace();
+  const [register, setRegister] = useState<any | null>(null);
+  const [rows, setRows] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"Extraction" | "Relationships" | "Review" | "Revisions" | "Transmittals">("Extraction");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Read search params for deep linking
+  useEffect(() => {
+    const tabParam = searchParams.get("tab") as any;
+    if (tabParam && ["Extraction", "Relationships", "Review", "Revisions", "Transmittals"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const fetchRegisterData = React.useCallback(async () => {
+    if (!id) return;
+    try {
+      const { getRegisters, getRegisterRows } = await import("@/lib/api/register_ai");
+      const regs = await getRegisters(id);
+      if (regs && regs.length > 0) {
+        const activeReg = regs[0];
+        setRegister(activeReg);
+        // Rows are fetched separately — not embedded in the Register object
+        const registerRows = await getRegisterRows(id, activeReg.id);
+        setRows(registerRows ?? []);
+
+        // Deep linking to specific row — read URL directly (not via hook) to avoid dep loop
+        const rowId = new URLSearchParams(window.location.search).get("row");
+        if (rowId) {
+          setTimeout(() => {
+            const el = document.getElementById(`row-${rowId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              el.classList.add('ring-2', 'ring-blue-400', 'bg-blue-50/50');
+              setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-50/50'), 3000);
+            }
+          }, 500);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load register data", error);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]); // IMPORTANT: activeTab and searchParams intentionally excluded — adding them causes re-fetch on every tab switch
+
+  useEffect(() => {
+    if (project) {
+      fetchRegisterData();
+    }
+
+    // Listen for completion events from AIRegisterTab.
+    // On a successful ZIP completion:
+    //   - refresh the shared workspace (picks up the new active_submission
+    //     that the backend just set in tasks.py)
+    //   - re-fetch register data
+    //   - auto-navigate to Pending Relationships, since the user is already
+    //     inside this project
+    const handleZipCompleted = () => {
+      fetchRegisterData();
+      refreshWorkspace();
+      setActiveTab("Relationships");
+    };
+    window.addEventListener("zip-processing-completed", handleZipCompleted);
+    return () => window.removeEventListener("zip-processing-completed", handleZipCompleted);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, fetchRegisterData, refreshWorkspace]);
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -239,7 +255,7 @@ export default function ProjectDetailsPage() {
       {/* Main Content: Conditional Rendering */}
       <div className="min-h-[50vh] pt-4">
         {activeTab === "Extraction" && <AIRegisterTab project={project} />}
-        
+
         {activeTab === "Relationships" && (
           <RelationshipConfirmation
             projectId={project.id}
@@ -249,7 +265,7 @@ export default function ProjectDetailsPage() {
             }}
           />
         )}
-        
+
         {activeTab === "Review" && register ? (
           <RegisterReview
             projectId={id}
@@ -260,14 +276,14 @@ export default function ProjectDetailsPage() {
               setActiveTab("Revisions");
             }}
             onSaveSuccess={fetchRegisterData}
-            activeSubmissionId={workspace?.active_submission ?? ""}
+            activeSubmissionId={activeSubmissionId ?? ""}
           />
         ) : activeTab === "Review" ? (
           <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-border">
             <p className="text-muted-foreground">No active register generated yet. Please complete extraction and relationships.</p>
           </div>
         ) : null}
-        
+
         {activeTab === "Revisions" && <RevisionManagementTab projectId={project.id} />}
         {activeTab === "Transmittals" && <TransmittalTab project={project} projectId={project.id} />}
       </div>
@@ -278,7 +294,7 @@ export default function ProjectDetailsPage() {
           project={project}
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
-          onSave={(updated) => setProject(updated)}
+          onSave={(updated) => onProjectUpdated(updated)}
         />
       )}
     </div>

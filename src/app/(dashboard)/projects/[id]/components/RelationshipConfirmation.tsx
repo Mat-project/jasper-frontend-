@@ -21,6 +21,8 @@ import {
   generateRegister,
   updateWorkspace,
 } from "@/lib/api/register_ai";
+import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
+import { useProjectWorkspace } from "../WorkspaceProvider";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -162,6 +164,10 @@ export default function RelationshipConfirmation({
   const [actionError, setActionError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // Shared workspace context — drives the default selected submission so
+  // every Register AI tab stays in sync on the same active submission.
+  const { activeSubmissionId, activeSubmissionNo } = useProjectWorkspace();
+
   // Submissions (ZIP Batches)
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState("");
@@ -180,14 +186,19 @@ export default function RelationshipConfirmation({
       const sorted = submissionsArray.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setSubmissions(sorted);
       if (sorted && sorted.length > 0) {
-        setSelectedSubmission(sorted[0].id);
+        // Default to the shared active submission when available; otherwise
+        // fall back to the latest submission. This keeps this tab in sync
+        // with the rest of the Register AI workspace.
+        const activeId = activeSubmissionId;
+        const match = activeId ? sorted.find((s: any) => s.id === activeId) : null;
+        setSelectedSubmission(match ? match.id : sorted[0].id);
       }
     } catch (err) {
       console.error("Failed to fetch submissions", err);
     } finally {
       setLoadingSubmissions(false);
     }
-  }, [projectId]);
+  }, [projectId, activeSubmissionId]);
 
   // ── Fetch relationships ──────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -217,6 +228,18 @@ export default function RelationshipConfirmation({
     window.addEventListener("zip-processing-completed", handleZipDone);
     return () => window.removeEventListener("zip-processing-completed", handleZipDone);
   }, [fetchData, fetchSubmissions]);
+
+  // Keep the local selector in sync with the shared active submission.
+  // When the workspace active submission changes (e.g. a new ZIP finishes or
+  // the user switches submission from another tab), follow it as long as it
+  // exists in the loaded submissions list.
+  useEffect(() => {
+    if (!activeSubmissionId || submissions.length === 0) return;
+    const exists = submissions.some((s) => s.id === activeSubmissionId);
+    if (exists && selectedSubmission !== activeSubmissionId) {
+      setSelectedSubmission(activeSubmissionId);
+    }
+  }, [activeSubmissionId, submissions, selectedSubmission]);
 
   // Update workspace current_stage to "Relationship" on mount
   useEffect(() => {
@@ -474,7 +497,14 @@ export default function RelationshipConfirmation({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
+    <div className="space-y-4">
+      <ActiveSubmissionBanner
+        selectedSubmissionId={selectedSubmission || undefined}
+        selectedSubmissionNo={
+          submissions.find((s) => s.id === selectedSubmission)?.submission_no
+        }
+      />
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -585,6 +615,7 @@ export default function RelationshipConfirmation({
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
           {generating ? "Generating..." : "Generate Register"}
         </button>
+      </div>
       </div>
     </div>
   );

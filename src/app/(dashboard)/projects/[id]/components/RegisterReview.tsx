@@ -17,6 +17,8 @@ import {
   Download
 } from "lucide-react";
 import { Register, RegisterRow, updateWorkspace } from "@/lib/api/register_ai";
+import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
+import { useProjectWorkspace } from "../WorkspaceProvider";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +70,10 @@ export default function RegisterReview({
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [showAllExceptions, setShowAllExceptions] = useState(false);
 
+  // Shared workspace context — used for the Active Submission banner and to
+  // keep the local submission selector in sync with the rest of the tabs.
+  const { activeSubmissionId: sharedActiveSubmissionId, activeSubmissionNo } = useProjectWorkspace();
+
   // Submissions (ZIP Batches) for filtering
   const [selectedSubmission, setSelectedSubmission] = useState("");
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -79,11 +85,26 @@ export default function RegisterReview({
     setDeletedIds([]);
   }, [rows]);
 
+  // Default the local selector to the shared active submission. The prop
+  // (sourced from the same context by the page) is kept for backward
+  // compatibility, but the shared context is the authoritative source.
   useEffect(() => {
-    if (activeSubmissionId && !selectedSubmission) {
-      setSelectedSubmission(activeSubmissionId);
+    const sharedId = sharedActiveSubmissionId || activeSubmissionId;
+    if (sharedId && !selectedSubmission) {
+      setSelectedSubmission(sharedId);
     }
-  }, [activeSubmissionId]);
+  }, [activeSubmissionId, sharedActiveSubmissionId, selectedSubmission]);
+
+  // Follow the shared active submission when it changes (e.g. after a new ZIP
+  // completes or the user switches submission in another tab), as long as the
+  // user hasn't deliberately picked a different historical submission here.
+  useEffect(() => {
+    if (!sharedActiveSubmissionId || submissions.length === 0) return;
+    const exists = submissions.some((s) => s.id === sharedActiveSubmissionId);
+    if (exists && selectedSubmission !== sharedActiveSubmissionId) {
+      setSelectedSubmission(sharedActiveSubmissionId);
+    }
+  }, [sharedActiveSubmissionId, submissions, selectedSubmission]);
 
   useEffect(() => {
     async function fetchSubmissions() {
@@ -122,7 +143,10 @@ export default function RegisterReview({
     ? editableRows.filter(r => r.zip_package === selectedSubmission)
     : editableRows;
 
-  const isReadOnly = selectedSubmission !== activeSubmissionId;
+  // Read-only when viewing a historical (non-active) submission. The shared
+  // workspace context is the authoritative source of the active submission.
+  const effectiveActiveSubmissionId = sharedActiveSubmissionId || activeSubmissionId;
+  const isReadOnly = selectedSubmission !== effectiveActiveSubmissionId;
 
   const allExceptions = register.validation_report?.exceptions ?? [];
   
@@ -330,6 +354,12 @@ export default function RegisterReview({
 
   return (
     <div className="space-y-6">
+      <ActiveSubmissionBanner
+        selectedSubmissionId={selectedSubmission || undefined}
+        selectedSubmissionNo={
+          submissions.find((s) => s.id === selectedSubmission)?.submission_no
+        }
+      />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

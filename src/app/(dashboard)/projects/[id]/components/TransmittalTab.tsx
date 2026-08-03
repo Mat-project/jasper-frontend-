@@ -21,6 +21,8 @@ import {
   Plus
 } from "lucide-react";
 import apiClient from "@/lib/api/client";
+import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
+import { useProjectWorkspace } from "../WorkspaceProvider";
 
 interface EmailTransmittal {
   id: string;
@@ -47,6 +49,10 @@ interface ZipPackage {
 }
 
 export default function TransmittalTab({ project, projectId }: { project: any; projectId: string }) {
+  // Shared workspace context — keeps this tab's selected submission in sync
+  // with the rest of the Register AI tabs.
+  const { activeSubmissionId } = useProjectWorkspace();
+
   // State
   const [targetCompany, setTargetCompany] = useState("");
   const [toField, setToField] = useState("");
@@ -150,14 +156,19 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
       const sorted = submissionsArray.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setSubmissions(sorted);
       if (sorted && sorted.length > 0) {
-        setSelectedSubmission(sorted[0].id);
+        // Default to the shared active submission when available; otherwise
+        // fall back to the latest submission. This keeps this tab in sync
+        // with the rest of the Register AI workspace.
+        const activeId = activeSubmissionId;
+        const match = activeId ? sorted.find((s: any) => s.id === activeId) : null;
+        setSelectedSubmission(match ? match.id : sorted[0].id);
       }
     } catch (err) {
       console.error("Failed to fetch submissions", err);
     } finally {
       setLoadingSubmissions(false);
     }
-  }, [projectId]);
+  }, [projectId, activeSubmissionId]);
 
   // Fetch Drawings filtered by submission
   const fetchDrawings = React.useCallback(async () => {
@@ -216,6 +227,18 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
       fetchDrawings();
     }
   }, [projectId, selectedSubmission, fetchDrawings]);
+
+  // Keep the local selector in sync with the shared active submission.
+  // When the workspace active submission changes (e.g. a new ZIP finishes or
+  // the user switches submission from another tab), follow it as long as it
+  // exists in the loaded submissions list.
+  useEffect(() => {
+    if (!activeSubmissionId || submissions.length === 0) return;
+    const exists = submissions.some((s) => s.id === activeSubmissionId);
+    if (exists && selectedSubmission !== activeSubmissionId) {
+      setSelectedSubmission(activeSubmissionId);
+    }
+  }, [activeSubmissionId, submissions, selectedSubmission]);
 
   // Reactive email body compiler
   useEffect(() => {
@@ -489,6 +512,14 @@ Jasper Detailing Services`;
           <span className="text-sm font-medium text-slate-700">{toast.message}</span>
         </div>
       )}
+
+      {/* Active Submission banner — shared across all tabs */}
+      <ActiveSubmissionBanner
+        selectedSubmissionId={selectedSubmission || undefined}
+        selectedSubmissionNo={
+          submissions.find((s) => s.id === selectedSubmission)?.submission_no
+        }
+      />
 
       {/* Main Grid Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
