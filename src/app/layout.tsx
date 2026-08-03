@@ -10,6 +10,8 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-inter",
+  // Fallback in case Google Fonts is unreachable in CI/build environment
+  preload: false,
 });
 
 export const metadata: Metadata = {
