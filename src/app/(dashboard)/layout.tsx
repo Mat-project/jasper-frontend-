@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/context";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { NotificationToaster } from "@/components/NotificationToaster";
 
 export default function DashboardLayout({
   children,
@@ -48,6 +49,11 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+      {/* Global toast notifications for Register AI workflow events.
+          Mounted once at the dashboard root so toasts appear on every page;
+          the toaster self-filters to only show toasts for the project the
+          user is currently viewing. */}
+      <NotificationToaster />
     </div>
   );
 }

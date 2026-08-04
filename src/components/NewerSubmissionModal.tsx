@@ -28,6 +28,11 @@ export function NewerSubmissionModal({
       });
       onSwitch();
       onClose();
+      // Notify the project page that the active submission was just switched
+      // so it can auto-navigate to Pending Relationships. The event is only
+      // emitted from this modal (rendered inside the current project's
+      // WorkspaceProvider), so it can never affect users in another project.
+      window.dispatchEvent(new Event("workspace-submission-switched"));
     } catch (error) {
       console.error("Failed to switch submission:", error);
     } finally {

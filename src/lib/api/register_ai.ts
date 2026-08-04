@@ -101,25 +101,57 @@ export interface RegisterNotification {
   id: string;
   user: string;
   project: string;
+  project_name?: string;
+  project_code?: string;
   title: string;
   message: string;
   status: "Unread" | "Read";
   action_type: string;
   action_id: string;
+  submission_id?: string | null;
   created_at: string;
 }
 
 // ─── Relationships ────────────────────────────────────────────────────────────
 
-/** Fetch all proposed relationships for a project */
+/** Fetch all proposed relationships for a project (follows pagination) */
 export async function getRelationships(projectId: string): Promise<Relationship[]> {
-  const res = await apiClient.get<any>(
-    `${BASE}/${projectId}/relationships/`
-  );
-  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
-    return res.data.results;
+  // Request a large page size to minimise round-trips, then follow
+  // the `next` links until all pages are consumed.
+  let url: string | null = `${BASE}/${projectId}/relationships/?page_size=100`;
+  const all: Relationship[] = [];
+  let pageCount = 0;
+  const MAX_PAGES = 20; // safety limit
+
+  while (url !== null && pageCount < MAX_PAGES) {
+    pageCount++;
+    const res: { data: any } = await apiClient.get<any>(url);
+    const data = res.data;
+    if (data && typeof data === 'object' && 'results' in data) {
+      all.push(...(data.results as Relationship[]));
+      // Extract just the path+query from the next URL to avoid
+      // cross-origin issues (e.g. next URL has http://localhost:8000
+      // but the browser might be accessing via a different host).
+      const nextUrl = data.next as string | null;
+      if (nextUrl) {
+        try {
+          const parsed = new URL(nextUrl);
+          url = parsed.pathname + parsed.search;
+        } catch {
+          url = nextUrl;
+        }
+      } else {
+        url = null;
+      }
+    } else if (Array.isArray(data)) {
+      all.push(...(data as Relationship[]));
+      url = null;
+    } else {
+      url = null;
+    }
   }
-  return Array.isArray(res.data) ? res.data : [];
+
+  return all;
 }
 
 /** Confirm a single relationship */
@@ -165,6 +197,31 @@ export async function getRegisters(projectId: string): Promise<Register[]> {
     return res.data.results;
   }
   return Array.isArray(res.data) ? res.data : [];
+}
+
+/** Download project register as Excel (J-456 NESBA format) */
+export async function exportProjectRegister(
+  projectId: string,
+  registerId?: string
+): Promise<Blob> {
+  const params = registerId ? { register_id: registerId } : {};
+  const res = await apiClient.get(
+    `${BASE}/${projectId}/registers/export_excel/`,
+    { params, responseType: "blob" }
+  );
+  return res.data as Blob;
+}
+
+/** Download monthly company-wide mail register as Excel (JASPER MAIL REGISTER format) */
+export async function exportMonthlyRegister(
+  year: number,
+  month: number
+): Promise<Blob> {
+  const res = await apiClient.get(
+    `/api/v1/register_ai/registers/export_monthly/`,
+    { params: { year, month }, responseType: "blob" }
+  );
+  return res.data as Blob;
 }
 
 /** Fetch register rows for a specific register ID */
@@ -253,14 +310,73 @@ export async function getProjectNotifications(
   return Array.isArray(res.data) ? res.data : [];
 }
 
-/** Mark notification as read */
+/** Mark notification as read (project-scoped) */
 export async function markNotificationRead(
   projectId: string,
   notificationId: string
 ): Promise<RegisterNotification> {
-  const res = await apiClient.patch<RegisterNotification>(
-    `${BASE}/${projectId}/notifications/${notificationId}/`,
-    { status: "Read" }
+  const res = await apiClient.post<RegisterNotification>(
+    `${BASE}/${projectId}/notifications/${notificationId}/mark-read/`
   );
   return res.data;
+}
+
+// ─── Global Notification Center (cross-project) ──────────────────────────────
+// The register_ai notifications endpoint is mounted both at the project-scoped
+// path (/api/v1/projects/<id>/notifications/) and the global path
+// (/api/v1/register_ai/notifications/). The global path returns ALL of the
+// current user's notifications across every project — this is what the
+// Notification Center bell in the header consumes.
+
+const NOTIF_BASE = "/api/v1/register_ai/notifications";
+
+/** Fetch all notifications for the current user (optionally filtered by project) */
+export async function getAllNotifications(
+  params: Record<string, any> = {}
+): Promise<RegisterNotification[]> {
+  const res = await apiClient.get<any>(`${NOTIF_BASE}/`, { params });
+  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
+    return res.data.results;
+  }
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+/** Fetch unread notifications for the current user */
+export async function getUnreadNotifications(
+  params: Record<string, any> = {}
+): Promise<RegisterNotification[]> {
+  const res = await apiClient.get<any>(`${NOTIF_BASE}/unread/`, { params });
+  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
+    return res.data.results;
+  }
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+/** Get the unread notification count for the current user */
+export async function getUnreadNotificationCount(): Promise<number> {
+  const res = await apiClient.get<{ count: number }>(`${NOTIF_BASE}/count/`);
+  return res.data.count;
+}
+
+/** Mark a single notification as read (global path) */
+export async function markNotificationReadGlobal(
+  notificationId: string
+): Promise<RegisterNotification> {
+  const res = await apiClient.post<RegisterNotification>(
+    `${NOTIF_BASE}/${notificationId}/mark-read/`
+  );
+  return res.data;
+}
+
+/** Mark all of the user's notifications as read */
+export async function markAllNotificationsRead(): Promise<{ status: string }> {
+  const res = await apiClient.post<{ status: string }>(`${NOTIF_BASE}/mark-all-read/`);
+  return res.data;
+}
+
+/** Soft-delete a notification */
+export async function deleteNotification(
+  notificationId: string
+): Promise<void> {
+  await apiClient.delete(`${NOTIF_BASE}/${notificationId}/`);
 }

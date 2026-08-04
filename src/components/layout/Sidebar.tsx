@@ -50,10 +50,6 @@ const triggerPrefetch = (href: string) => {
       api.getPayslips().catch(() => null);
       api.getSalaryStructures().catch(() => null);
     });
-  } else if (href === "/production/history") {
-    import("@/lib/api/production").then((api) => {
-      api.getProductionEntries({ status: "Approved" }).catch(() => null);
-    });
   } else if (href === "/projects") {
     import("@/lib/api/projects").then((api) => {
       api.getProjects().catch(() => null);
@@ -176,7 +172,6 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     Masters: true,
-    Production: true,
     Administration: false,
   });
 
@@ -243,13 +238,13 @@ export function Sidebar() {
 
       // 2. Managers see specific modules, but restricted in Masters and no Administration
       if (isManager) {
-        const allowedManager = ["Dashboard", "Masters", "Projects", "Commercial", "Attendance", "Payroll", "Production", "Documents", "Revisions", "Reports"];
+        const allowedManager = ["Dashboard", "Masters", "Projects", "Commercial", "Attendance", "Payroll", "Reports"];
         return allowedManager.includes(item.label);
       }
 
-      // 3. Employees see production and basic tracking
+      // 3. Employees see basic tracking
       if (isEmployee) {
-        const allowedEmployee = ["Dashboard", "Attendance", "Production", "Documents", "Revisions"];
+        const allowedEmployee = ["Dashboard", "Attendance"];
         return allowedEmployee.includes(item.label);
       }
 
@@ -262,12 +257,6 @@ export function Sidebar() {
         let subItems = [...item.subItems];
         if (isManager && item.label === "Masters") {
           subItems = subItems.filter(sub => sub.label === "Employees");
-        } else if (isEmployee && item.label === "Production") {
-          if (hasRoleIn(["Checker"])) {
-            subItems = subItems.filter(sub => ["Production Entry", "Production Approval", "Production History"].includes(sub.label));
-          } else {
-            subItems = subItems.filter(sub => ["Production Entry", "Production History"].includes(sub.label));
-          }
         }
         return { ...item, subItems };
       }

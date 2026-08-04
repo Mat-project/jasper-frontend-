@@ -11,11 +11,7 @@ type ReportType =
   | "employees"
   | "attendance"
   | "leaves"
-  | "projects"
-  | "production"
-  | "revisions"
-  | "billing"
-  | "productivity";
+  | "projects";
 
 export default function ReportsPage() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -134,10 +130,6 @@ export default function ReportsPage() {
                 <option value="attendance">Attendance Records</option>
                 <option value="leaves">Leave Requests</option>
                 <option value="projects">Projects List</option>
-                <option value="production">Production Entries</option>
-                <option value="revisions">Document Revisions</option>
-                <option value="billing">Revision Billing</option>
-                <option value="productivity">Employee Productivity</option>
               </select>
             </div>
 
@@ -299,47 +291,6 @@ export default function ReportsPage() {
                         <th className="p-3 font-semibold text-muted-foreground">Status</th>
                       </tr>
                     )}
-                    {selectedReport === "production" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Date</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Employee</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Project</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Category</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Sheets</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Tons</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
-                      </tr>
-                    )}
-                    {selectedReport === "revisions" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Doc Number</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Title</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Rev No</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Reason</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Effective Date</th>
-                      </tr>
-                    )}
-                    {selectedReport === "billing" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Doc Number</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Title</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Rev No</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Amount</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Status</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Invoice Ref</th>
-                      </tr>
-                    )}
-                    {selectedReport === "productivity" && (
-                      <tr>
-                        <th className="p-3 font-semibold text-muted-foreground">Code</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Name</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Assignments</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Allocation %</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Tons Detailing</th>
-                        <th className="p-3 font-semibold text-muted-foreground">Score</th>
-                      </tr>
-                    )}
                   </thead>
                   <tbody className="divide-y divide-border">
                     {reportData.map((row, idx) => (
@@ -383,47 +334,6 @@ export default function ReportsPage() {
                             <td className="p-3 font-mono">{row.start_date}</td>
                             <td className="p-3">₹{row.budget?.toLocaleString() || 0}</td>
                             <td className="p-3 font-semibold">{row.status}</td>
-                          </>
-                        )}
-                        {selectedReport === "production" && (
-                          <>
-                            <td className="p-3 font-mono">{row.date}</td>
-                            <td className="p-3 font-medium text-foreground">{row.employee_name}</td>
-                            <td className="p-3 font-mono">{row.project_code}</td>
-                            <td className="p-3">{row.drawing_category_name}</td>
-                            <td className="p-3 font-semibold">{row.quantity}</td>
-                            <td className="p-3 font-semibold text-brand-400">{row.tonnage} MT</td>
-                            <td className="p-3 font-semibold">{row.status}</td>
-                          </>
-                        )}
-                        {selectedReport === "revisions" && (
-                          <>
-                            <td className="p-3 font-mono">{row.document_number}</td>
-                            <td className="p-3 font-medium text-foreground">{row.document_title}</td>
-                            <td className="p-3 font-semibold">{row.revision_number}</td>
-                            <td className="p-3 text-muted-foreground">{row.revision_reason}</td>
-                            <td className="p-3 font-semibold">{row.status}</td>
-                            <td className="p-3 font-mono">{row.effective_date || "—"}</td>
-                          </>
-                        )}
-                        {selectedReport === "billing" && (
-                          <>
-                            <td className="p-3 font-mono">{row.document_number}</td>
-                            <td className="p-3 font-medium text-foreground">{row.document_title}</td>
-                            <td className="p-3 font-semibold">{row.revision_number}</td>
-                            <td className="p-3 font-semibold">₹{row.charge_amount?.toLocaleString() || 0}</td>
-                            <td className="p-3 font-semibold">{row.payment_status}</td>
-                            <td className="p-3 font-mono">{row.invoice_reference || "—"}</td>
-                          </>
-                        )}
-                        {selectedReport === "productivity" && (
-                          <>
-                            <td className="p-3 font-mono">{row.employee_code || "—"}</td>
-                            <td className="p-3 font-medium text-foreground">{row.employee_name}</td>
-                            <td className="p-3">{row.assignments_count}</td>
-                            <td className="p-3">{row.total_allocation}%</td>
-                            <td className="p-3 font-semibold text-brand-400">{row.total_tonnage} MT</td>
-                            <td className="p-3 font-bold text-emerald-400">{row.productivity_score}</td>
                           </>
                         )}
                       </tr>

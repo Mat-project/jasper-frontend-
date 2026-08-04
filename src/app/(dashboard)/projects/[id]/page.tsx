@@ -10,6 +10,8 @@ import {
   ChevronRight,
   X,
   Edit2,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
@@ -85,19 +87,36 @@ function ProjectDetailsContent({
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { activeSubmissionId, refreshWorkspace } = useProjectWorkspace();
+  const { activeSubmissionId, refreshWorkspace, switchSubmission } = useProjectWorkspace();
   const [register, setRegister] = useState<any | null>(null);
   const [rows, setRows] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"Extraction" | "Relationships" | "Review" | "Revisions" | "Transmittals">("Extraction");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Read search params for deep linking
+  // Read search params for deep linking (e.g. from a notification click).
+  //   ?tab=<Tab>          → switch the active Register AI tab
+  //   ?submission=<uuid>  → set the active submission via WorkspaceContext
+  // The submission switch uses the existing WorkspaceContext API so every
+  // Register AI tab stays synchronized. We track the last applied submission
+  // param in a ref to avoid re-triggering the switch on unrelated re-renders.
+  const lastAppliedSubmissionRef = React.useRef<string | null>(null);
   useEffect(() => {
     const tabParam = searchParams.get("tab") as any;
     if (tabParam && ["Extraction", "Relationships", "Review", "Revisions", "Transmittals"].includes(tabParam)) {
       setActiveTab(tabParam);
     }
-  }, [searchParams]);
+    const submissionParam = searchParams.get("submission");
+    if (
+      submissionParam &&
+      submissionParam !== lastAppliedSubmissionRef.current &&
+      submissionParam !== activeSubmissionId
+    ) {
+      lastAppliedSubmissionRef.current = submissionParam;
+      // switchSubmission writes to the backend and refreshes workspace state,
+      // which keeps every Register AI tab in sync (multi-tab consistency).
+      switchSubmission(submissionParam);
+    }
+  }, [searchParams, activeSubmissionId, switchSubmission]);
 
   const fetchRegisterData = React.useCallback(async () => {
     if (!id) return;
@@ -151,6 +170,22 @@ function ProjectDetailsContent({
     return () => window.removeEventListener("zip-processing-completed", handleZipCompleted);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, fetchRegisterData, refreshWorkspace]);
+
+  // When the user confirms the "Newer Submission Available" prompt by clicking
+  // Switch, the NewerSubmissionModal updates the workspace and emits this
+  // event. Auto-navigate to Pending Relationships so the user lands on the
+  // next step of the workflow for the newly active submission.
+  //
+  // This listener lives in ProjectDetailsContent, which is mounted only for
+  // the currently open project, so users working in another project are never
+  // affected. No page reload is performed — only the in-page tab state flips.
+  useEffect(() => {
+    const handleSwitched = () => {
+      setActiveTab("Relationships");
+    };
+    window.addEventListener("workspace-submission-switched", handleSwitched);
+    return () => window.removeEventListener("workspace-submission-switched", handleSwitched);
+  }, []);
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -222,6 +257,51 @@ function ProjectDetailsContent({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                try {
+                  const { exportProjectRegister } = await import("@/lib/api/register_ai");
+                  const blob = await exportProjectRegister(id, register?.id);
+                  const url = window.URL.createObjectURL(blob);
+                  const a = window.document.createElement("a");
+                  a.href = url;
+                  a.download = `${project.code}_register${register ? `_V${register.version_number}` : ""}.xlsx`;
+                  window.document.body.appendChild(a);
+                  a.click();
+                  window.document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+                } catch (e) {
+                  console.error("Export failed", e);
+                  alert("Failed to export register. Please try again.");
+                }
+              }}
+              className="px-4 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Export Register
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const now = new Date();
+                  const { exportMonthlyRegister } = await import("@/lib/api/register_ai");
+                  const blob = await exportMonthlyRegister(now.getFullYear(), now.getMonth() + 1);
+                  const url = window.URL.createObjectURL(blob);
+                  const a = window.document.createElement("a");
+                  a.href = url;
+                  a.download = `JASPER_MAIL_REGISTER_${now.toLocaleString("en-US", { month: "long" }).toUpperCase()}_${now.getFullYear()}.xlsx`;
+                  window.document.body.appendChild(a);
+                  a.click();
+                  window.document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+                } catch (e) {
+                  console.error("Export failed", e);
+                  alert("Failed to export monthly register. Please try again.");
+                }
+              }}
+              className="px-4 py-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" /> Monthly Mail Register
+            </button>
             <button
               onClick={() => setIsEditModalOpen(true)}
               className="px-4 py-2 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
