@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   Clock,
   TrendingDown,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getProjects, createProject, deleteProject, EnterpriseProject } from "@/lib/api/projects";
@@ -31,8 +33,8 @@ export default function EnterpriseProjectsPage() {
 
   const [addForm, setAddForm] = useState({
     code: "", name: "", client: "",
-    start_date: "2026-07-01", end_date: "2026-12-31",
-    mail_number: "", mail_cc: "",
+    start_date: "2026-07-01",
+    mail_number: "", mail_to: "", mail_cc: "", mail_bcc: "",
   });
 
   useEffect(() => {
@@ -75,7 +77,7 @@ export default function EnterpriseProjectsPage() {
       setProjects([newProj, ...projects]);
       setIsAddOpen(false);
       showToast("Project created successfully", "success");
-      setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", end_date: "2026-12-31", mail_number: "", mail_cc: "" });
+      setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", mail_number: "", mail_to: "", mail_cc: "", mail_bcc: "" });
     } catch (error: unknown) {
       const err = error as any;
       showToast(err.response?.data?.detail || "Failed to create project", "error");
@@ -133,9 +135,37 @@ export default function EnterpriseProjectsPage() {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Project Hub</h1>
           <p className="text-slate-500 mt-1">Manage enterprise projects and AI document registers.</p>
         </div>
-        <button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2">
-          <Plus className="h-4 w-4" /> New Project
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              const now = new Date();
+              const year = now.getFullYear();
+              const month = now.getMonth() + 1;
+              try {
+                const { exportMonthlyRegister } = await import("@/lib/api/register_ai");
+                const blob = await exportMonthlyRegister(year, month);
+                const url = window.URL.createObjectURL(blob);
+                const a = window.document.createElement("a");
+                a.href = url;
+                a.download = `JASPER_MAIL_REGISTER_${now.toLocaleString("en-US", { month: "long" }).toUpperCase()}_${year}.xlsx`;
+                window.document.body.appendChild(a);
+                a.click();
+                window.document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                showToast("Monthly Mail Register downloaded", "success");
+              } catch (e) {
+                console.error("Export failed", e);
+                showToast("Failed to export monthly register", "error");
+              }
+            }}
+            className="px-4 py-2.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" /> Monthly Mail Register
+          </button>
+          <button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2">
+            <Plus className="h-4 w-4" /> New Project
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -213,7 +243,7 @@ export default function EnterpriseProjectsPage() {
                   <td className="px-6 py-4 text-slate-500">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3 w-3 text-slate-400" />
-                      <span className="text-xs font-medium">{p.start_date} to {p.end_date}</span>
+                      <span className="text-xs font-medium">{p.start_date} to {p.end_date || "TBD"}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -278,24 +308,26 @@ export default function EnterpriseProjectsPage() {
                 <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Project Name</label>
                 <input required type="text" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Downtown Metro Extension" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Start Date</label>
-                  <input required type="date" value={addForm.start_date} onChange={(e) => setAddForm({ ...addForm, start_date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">End Date</label>
-                  <input required type="date" value={addForm.end_date} onChange={(e) => setAddForm({ ...addForm, end_date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Start Date</label>
+                <input required type="date" value={addForm.start_date} onChange={(e) => setAddForm({ ...addForm, start_date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Mail Number</label>
+                <input type="text" value={addForm.mail_number} onChange={(e) => setAddForm({ ...addForm, mail_number: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. JANU-SUB-001" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Default To (comma separated)</label>
+                <input type="text" value={addForm.mail_to} onChange={(e) => setAddForm({ ...addForm, mail_to: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. client@company.com, lead@company.com" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Mail Number</label>
-                  <input type="text" value={addForm.mail_number} onChange={(e) => setAddForm({ ...addForm, mail_number: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. ALEF-2026-140" />
+                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Default CC</label>
+                  <input type="text" value={addForm.mail_cc} onChange={(e) => setAddForm({ ...addForm, mail_cc: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. pm@jasper.ae" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">CC List</label>
-                  <input type="text" value={addForm.mail_cc} onChange={(e) => setAddForm({ ...addForm, mail_cc: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. client@company.com" />
+                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Default BCC</label>
+                  <input type="text" value={addForm.mail_bcc} onChange={(e) => setAddForm({ ...addForm, mail_bcc: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. archive@jasper.ae" />
                 </div>
               </div>
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">

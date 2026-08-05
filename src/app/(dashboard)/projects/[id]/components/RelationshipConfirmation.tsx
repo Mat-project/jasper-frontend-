@@ -254,9 +254,16 @@ export default function RelationshipConfirmation({
   }, [projectId]);
 
   // ── Derived state filtered by selected submission ───────────────────────────
-  const filteredRelationships = relationships.filter(
-    (r) => !selectedSubmission || r.zip_package === selectedSubmission
-  );
+  // Sort by drawing_number ascending so drawings appear in proper sequential
+  // order (e.g. B5-025, B5-026, B5-027, ...) instead of random order.
+  const filteredRelationships = relationships
+    .filter((r) => !selectedSubmission || r.zip_package === selectedSubmission)
+    .slice()
+    .sort((a, b) => {
+      const aNum = a.drawing_number || "";
+      const bNum = b.drawing_number || "";
+      return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
+    });
   const pending = filteredRelationships.filter((r) => isPending(r.status));
   const confirmed = filteredRelationships.filter((r) => r.status === "Confirmed");
   const rejected = filteredRelationships.filter((r) => r.status === "Rejected");

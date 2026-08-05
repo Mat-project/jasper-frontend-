@@ -10,7 +10,6 @@ import {
   ChevronRight,
   X,
   Edit2,
-  Download,
   FileSpreadsheet,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
@@ -252,7 +251,7 @@ function ProjectDetailsContent({
               <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
               <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
                 <span className="flex items-center gap-1"><Building2 className="h-4 w-4 text-slate-400" /> {project.client}</span>
-                <span className="flex items-center gap-1"><Calendar className="h-4 w-4 text-slate-400" /> {project.start_date} to {project.end_date}</span>
+                <span className="flex items-center gap-1"><Calendar className="h-4 w-4 text-slate-400" /> {project.start_date} to {project.end_date || "TBD"}</span>
               </div>
             </div>
           </div>
@@ -278,29 +277,6 @@ function ProjectDetailsContent({
               className="px-4 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
             >
               <FileSpreadsheet className="h-4 w-4" /> Export Register
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  const now = new Date();
-                  const { exportMonthlyRegister } = await import("@/lib/api/register_ai");
-                  const blob = await exportMonthlyRegister(now.getFullYear(), now.getMonth() + 1);
-                  const url = window.URL.createObjectURL(blob);
-                  const a = window.document.createElement("a");
-                  a.href = url;
-                  a.download = `JASPER_MAIL_REGISTER_${now.toLocaleString("en-US", { month: "long" }).toUpperCase()}_${now.getFullYear()}.xlsx`;
-                  window.document.body.appendChild(a);
-                  a.click();
-                  window.document.body.removeChild(a);
-                  window.URL.revokeObjectURL(url);
-                } catch (e) {
-                  console.error("Export failed", e);
-                  alert("Failed to export monthly register. Please try again.");
-                }
-              }}
-              className="px-4 py-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" /> Monthly Mail Register
             </button>
             <button
               onClick={() => setIsEditModalOpen(true)}
@@ -396,7 +372,9 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
   const [priority, setPriority] = useState(project.priority || "Low");
   const [startDate, setStartDate] = useState(project.start_date || "");
   const [endDate, setEndDate] = useState(project.end_date || "");
+  const [mailTo, setMailTo] = useState(project.mail_to || "");
   const [mailCc, setMailCc] = useState(project.mail_cc || "");
+  const [mailBcc, setMailBcc] = useState(project.mail_bcc || "");
   const [mailNumber, setMailNumber] = useState(project.mail_number || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -417,7 +395,9 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
         priority,
         start_date: startDate || null,
         end_date: endDate || null,
+        mail_to: mailTo,
         mail_cc: mailCc,
+        mail_bcc: mailBcc,
         mail_number: mailNumber
       });
       onSave(res.data);
@@ -522,22 +502,44 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">End Date</label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">End Date (Optional)</label>
               <input
                 type="date"
-                value={endDate}
+                value={endDate || ""}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
 
             <div className="col-span-2">
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Mail CC List (Comma separated)</label>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Default To (Comma separated)</label>
+              <input
+                type="text"
+                value={mailTo}
+                onChange={(e) => setMailTo(e.target.value)}
+                placeholder="e.g. client@company.com, lead@company.com"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Default CC (Comma separated)</label>
               <input
                 type="text"
                 value={mailCc}
                 onChange={(e) => setMailCc(e.target.value)}
                 placeholder="e.g. mathan@email.com, check@email.com"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Default BCC (Comma separated)</label>
+              <input
+                type="text"
+                value={mailBcc}
+                onChange={(e) => setMailBcc(e.target.value)}
+                placeholder="e.g. archive@jasper.ae"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>

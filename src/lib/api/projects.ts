@@ -6,12 +6,14 @@ export interface EnterpriseProject {
   name: string;
   client: string;
   start_date: string;
-  end_date: string;
+  end_date?: string | null;
   status: string;
   budget: string;
   spent: string;
   mail_number?: string;
+  mail_to?: string;
   mail_cc?: string;
+  mail_bcc?: string;
 }
 
 interface PaginatedResponse<T> {

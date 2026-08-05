@@ -138,10 +138,17 @@ export default function RegisterReview({
     updateWorkspaceStage();
   }, [projectId]);
 
-  // visibleRows filtered by submission selector
-  const visibleRows = selectedSubmission
+  // visibleRows filtered by submission selector, sorted by drawing_number
+  // ascending so drawings appear in proper sequential order (e.g. B5-025,
+  // B5-026, B5-027, ...) instead of random insertion order.
+  const visibleRows = (selectedSubmission
     ? editableRows.filter(r => r.zip_package === selectedSubmission)
-    : editableRows;
+    : editableRows
+  ).slice().sort((a, b) => {
+    const aNum = a.drawing_number || "";
+    const bNum = b.drawing_number || "";
+    return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
+  });
 
   // Read-only when viewing a historical (non-active) submission. The shared
   // workspace context is the authoritative source of the active submission.

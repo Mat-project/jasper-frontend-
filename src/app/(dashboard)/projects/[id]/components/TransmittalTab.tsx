@@ -30,6 +30,7 @@ interface EmailTransmittal {
   subject: string;
   to: string;
   cc?: string;
+  bcc?: string;
   body: string;
   companyName: string;
   status: "Sent" | "Delivered" | "Failed";
@@ -45,6 +46,7 @@ interface ZipPackage {
   id: string;
   submission_no: string;
   original_filename: string;
+  heading?: string | null;
   created_at: string;
 }
 
@@ -57,6 +59,7 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
   const [targetCompany, setTargetCompany] = useState("");
   const [toField, setToField] = useState("");
   const [ccField, setCcField] = useState("");
+  const [bccField, setBccField] = useState("");
   const [subjectField, setSubjectField] = useState("");
   const [bodyField, setBodyField] = useState("");
   const [sending, setSending] = useState(false);
@@ -99,10 +102,16 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
   // Textarea Ref for formatting
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Initialize Cc List and Mail Number from project defaults
+  // Initialize To, Cc, Bcc and Mail Number from project defaults
   useEffect(() => {
+    if (project?.mail_to) {
+      setToField(project.mail_to);
+    }
     if (project?.mail_cc) {
       setCcField(project.mail_cc);
+    }
+    if (project?.mail_bcc) {
+      setBccField(project.mail_bcc);
     }
     if (project?.mail_number) {
       setLocalMailNumber(project.mail_number);
@@ -200,9 +209,16 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
         const rowsArray = Array.isArray(allRows) ? allRows : [];
         setRegisterRows(rowsArray);
         
-        // Extract drawing numbers in order, filtered by the selected submission (ZipPackage)
+        // Extract drawing numbers in order, filtered by the selected submission
+        // (ZipPackage), sorted by drawing_number ascending so they appear in
+        // proper sequential order (e.g. B5-025, B5-026, B5-027, ...).
         const extracted = rowsArray
           .filter((row: any) => row.drawing_number && row.zip_package === selectedSubmission)
+          .sort((a: any, b: any) => {
+            const aNum = a.drawing_number || "";
+            const bNum = b.drawing_number || "";
+            return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
+          })
           .map((row: any) => row.drawing_number);
         
         setDrawings(extracted);
@@ -243,14 +259,25 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
   // Reactive email body compiler
   useEffect(() => {
     if (!targetCompany) return;
-    
+
     const contactData = contacts.find(c => c.id.toString() === targetCompany);
     if (contactData) {
+      // Use contact's emails for To, but keep project default CC/BCC
       setToField(contactData.emails);
-      const pName = project?.name || "Project";
+      setCcField(project?.mail_cc || "");
+      setBccField(project?.mail_bcc || "");
       const mailNum = localMailNumber || "MAIL-001";
-      
+
       setSubjectField(mailNum);
+
+      // ── Use ZIP filename heading instead of project name ──────────
+      // The client wants the descriptive heading from the ZIP filename
+      // (e.g. "BASEMENT-5 (POUR-H-1 B5) LIFT PIT REINFORCEMENT DETAILS")
+      // to appear in the email body instead of the project name.
+      // Fall back to project name if no submission is selected or the
+      // heading is not available.
+      const selectedSub = submissions.find(s => s.id === selectedSubmission);
+      const heading = selectedSub?.heading || selectedSub?.original_filename || project?.name || "Project";
 
       let drawingListText = "";
       if (drawings.length > 0) {
@@ -263,7 +290,7 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
 
 Please click the link below to download the following drawings.
 
-${pName}
+${heading}
 
 ${drawingListText}
 
@@ -275,7 +302,7 @@ Jasper Detailing Services`;
 
       setBodyField(bodyText);
     }
-  }, [targetCompany, drawings, localMailNumber, contacts, project]);
+  }, [targetCompany, drawings, localMailNumber, contacts, project, submissions, selectedSubmission]);
 
   // Toast Helper
   const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
@@ -349,12 +376,13 @@ Jasper Detailing Services`;
       showToast("No transmittal records found to export.", "error");
       return;
     }
-    const headers = ["Date Sent", "Subject", "To", "Cc", "Recipient Company", "Status"];
+    const headers = ["Date Sent", "Subject", "To", "Cc", "Bcc", "Recipient Company", "Status"];
     const csvRows = history.map(item => [
       `"${new Date(item.dateSent).toLocaleString()}"`,
       `"${(item.subject || '').replace(/"/g, '""')}"`,
       `"${(item.to || '').replace(/"/g, '""')}"`,
       `"${(item.cc || '').replace(/"/g, '""')}"`,
+      `"${(item.bcc || '').replace(/"/g, '""')}"`,
       `"${(item.companyName || '').replace(/"/g, '""')}"`,
       `"${item.status}"`
     ]);
@@ -469,6 +497,7 @@ Jasper Detailing Services`;
     const payload = {
       to: toField,
       cc: ccField,
+      bcc: bccField,
       subject: subjectField,
       body: bodyField,
       companyName: targetContact ? targetContact.company_name : "Other",
@@ -489,8 +518,9 @@ Jasper Detailing Services`;
       
       // Reset form controls
       setTargetCompany("");
-      setToField("");
+      setToField(project?.mail_to || "");
       setCcField(project?.mail_cc || "");
+      setBccField(project?.mail_bcc || "");
       setSubjectField("");
       setBodyField("");
     } catch (err: any) {
@@ -655,6 +685,20 @@ Jasper Detailing Services`;
                     placeholder="carbon copy email addresses"
                     value={ccField}
                     onChange={e => setCcField(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                  />
+                </div>
+
+                {/* Bcc Recipient emails */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Bcc (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="blind carbon copy email addresses"
+                    value={bccField}
+                    onChange={e => setBccField(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   />
                 </div>
@@ -923,6 +967,9 @@ Jasper Detailing Services`;
                         {item.cc && (
                           <span className="text-[11px] text-slate-400 block truncate">Cc: {item.cc}</span>
                         )}
+                        {item.bcc && (
+                          <span className="text-[11px] text-slate-400 block truncate">Bcc: {item.bcc}</span>
+                        )}
                       </div>
                     </td>
                     <td className="py-4 px-6 text-slate-600">
@@ -994,6 +1041,12 @@ Jasper Detailing Services`;
                 <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
                   <span className="text-slate-400 font-medium">Cc:</span>
                   <span className="col-span-2 text-slate-700 break-all">{selectedTransmittal.cc}</span>
+                </div>
+              )}
+              {selectedTransmittal.bcc && (
+                <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
+                  <span className="text-slate-400 font-medium">Bcc:</span>
+                  <span className="col-span-2 text-slate-700 break-all">{selectedTransmittal.bcc}</span>
                 </div>
               )}
               <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
