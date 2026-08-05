@@ -34,7 +34,10 @@ import {
 } from "lucide-react";
 import { getProjects, type EnterpriseProject } from "@/lib/api/projects";
 import apiClient from "@/lib/api/client";
-import { sendLiveSMTPEmail } from "./actions";
+
+// Sender identity — read from public env var (set NEXT_PUBLIC_DEFAULT_FROM_EMAIL in .env)
+const SENDER_EMAIL = process.env.NEXT_PUBLIC_DEFAULT_FROM_EMAIL || "jasperalief1@gmail.com";
+const SENDER_NAME = "Lead Draftsman";
 
 // Target Companies & templates configuration
 const TARGET_COMPANIES = [
@@ -188,7 +191,7 @@ export default function MiniGmailPage() {
             id: "inbound-1",
             from: "engineering@econsteel.com",
             fromName: "Econ Steel Construction",
-            to: "draftsman@jasper.com",
+            to: SENDER_EMAIL,
             cc: "approvals@jasper.com",
             subject: "Clarification Request: Abu Dhabi Mall Anchor Details",
             body: "Hi Jasper Engineering Team,\n\nWe noticed a coordinates mismatch on sheet STR-02 (Revision 02) anchor bolts coordinates.\n\nCould you please verify with the latest layout plan and upload the updated document register?\n\nBest regards,\nEcon Detailing Team",
@@ -203,7 +206,7 @@ export default function MiniGmailPage() {
             id: "inbound-2",
             from: "detailing@alefservices.com",
             fromName: "Alef Detailing Services",
-            to: "draftsman@jasper.com",
+            to: SENDER_EMAIL,
             cc: "",
             subject: "Drawing Revision: Oman Industrial Plant - Rev 03 Detail Sheets",
             body: "Dear Lead Draftsman,\n\nWe have completed the requested detailing revisions for the Oman Industrial Plant columns.\n\nPlease check the attached drawings and send the finalized transmittal notice.\n\nThanks,\nAlef Coordination Team",
@@ -218,8 +221,8 @@ export default function MiniGmailPage() {
           },
           {
             id: "sent-mock-1",
-            from: "draftsman@jasper.com",
-            fromName: "Lead Draftsman (Jasper)",
+            from: SENDER_EMAIL,
+            fromName: SENDER_NAME,
             to: "contacts@jaspercontracting.com, manager@jaspercontracting.com",
             cc: "cc@jasper.com",
             subject: "Transmittal Notice: Oman Industrial Plant - Verified Document Register",
@@ -389,19 +392,11 @@ export default function MiniGmailPage() {
 
     setSending(true);
     const newMsgId = `sent-${Date.now()}`;
-    const payload = {
-      to: toField,
-      cc: ccField,
-      subject: subjectField,
-      body: bodyField,
-      companyName: targetCompany || "Other",
-      attachments: composerAttachments
-    };
 
     const newEmailObj: EmailMessage = {
       id: newMsgId,
-      from: "draftsman@jasper.com",
-      fromName: "Lead Draftsman (Jasper)",
+      from: SENDER_EMAIL,
+      fromName: SENDER_NAME,
       to: toField,
       cc: ccField,
       subject: subjectField,
@@ -415,37 +410,30 @@ export default function MiniGmailPage() {
     };
 
     try {
-      // Call Server Action for live SMTP transmission
-      const smtpRes = await sendLiveSMTPEmail(payload);
-      if (!smtpRes.success) {
-        throw new Error(smtpRes.error || "SMTP dispatch failed");
-      }
+      // Send via Django backend — handles SMTP dispatch + DB record in one transaction
+      const res = await apiClient.post(`/api/v1/projects/${id}/email/send/`, {
+        to: toField,
+        cc: ccField,
+        subject: subjectField,
+        body: bodyField,
+        companyName: targetCompany || "Other",
+        attachments: composerAttachments.map(a => a.name)
+      });
 
-      showToast(`Real email dispatched successfully via SMTP (${smtpRes.host})!`, "success");
-      newEmailObj.status = "Delivered";
-      
-      // Also notify backend API (if available) to save in Django db
-      try {
-        await apiClient.post(`/api/v1/projects/${id}/email/send/`, {
-          to: toField,
-          cc: ccField,
-          subject: subjectField,
-          body: bodyField,
-          companyName: targetCompany || "Other",
-          attachments: composerAttachments.map(a => a.name)
-        });
-      } catch (apiErr) {
-        console.warn("Could not sync with backend Django db, saved in local storage fallback only", apiErr);
-      }
+      showToast(`Email sent successfully from ${SENDER_EMAIL}!`, "success");
+      newEmailObj.status = res.data?.status || "Delivered";
+      newEmailObj.id = res.data?.id || newMsgId;
+      newEmailObj.dateSent = res.data?.dateSent || newEmailObj.dateSent;
 
       const updated = [newEmailObj, ...emails];
       saveEmailsToStorage(updated);
     } catch (err: any) {
-      console.error("SMTP Live dispatch failed, executing local storage simulation...", err);
+      console.error("Email dispatch failed via backend:", err);
       newEmailObj.status = "Failed";
       const updated = [newEmailObj, ...emails];
       saveEmailsToStorage(updated);
-      showToast(`SMTP Fail: ${err.message || "Could not connect to SMTP server"}`, "error");
+      const errMsg = err?.response?.data?.error || err?.message || "Could not send email";
+      showToast(`Send failed: ${errMsg}`, "error");
     } finally {
       setSending(false);
       setComposing(false);
@@ -463,9 +451,9 @@ export default function MiniGmailPage() {
     const replyId = `reply-${Date.now()}`;
     const replyObj: EmailMessage = {
       id: replyId,
-      from: "draftsman@jasper.com",
-      fromName: "Lead Draftsman (Jasper)",
-      to: replyMode === "replyAll" 
+      from: SENDER_EMAIL,
+      fromName: SENDER_NAME,
+      to: replyMode === "replyAll"
         ? `${selectedEmail.from}${selectedEmail.cc ? ", " + selectedEmail.cc : ""}`
         : selectedEmail.from,
       cc: "",
@@ -480,38 +468,25 @@ export default function MiniGmailPage() {
     };
 
     try {
-      // Call Server Action for live SMTP transmission
-      const smtpRes = await sendLiveSMTPEmail({
+      // Send reply via Django backend — SMTP + DB record in one call
+      const res = await apiClient.post(`/api/v1/projects/${id}/email/send/`, {
         to: replyObj.to,
         cc: replyObj.cc,
         subject: replyObj.subject,
         body: replyObj.body,
-        attachments: replyAttachments
+        companyName: replyObj.companyName,
+        attachments: replyAttachments.map(a => a.name)
       });
 
-      if (!smtpRes.success) {
-        throw new Error(smtpRes.error || "SMTP dispatch failed");
-      }
-
-      showToast(`Reply sent successfully via live SMTP!`, "success");
-      replyObj.status = "Delivered";
-
-      // Try sync to Django backend
-      try {
-        await apiClient.post(`/api/v1/projects/${id}/email/send/`, {
-          to: replyObj.to,
-          subject: replyObj.subject,
-          body: replyObj.body,
-          companyName: replyObj.companyName,
-          attachments: replyAttachments.map(a => a.name)
-        });
-      } catch (apiErr) {
-        console.warn("Could not sync reply to Django backend", apiErr);
-      }
+      showToast(`Reply sent successfully from ${SENDER_EMAIL}!`, "success");
+      replyObj.status = res.data?.status || "Delivered";
+      replyObj.id = res.data?.id || replyId;
+      replyObj.dateSent = res.data?.dateSent || replyObj.dateSent;
     } catch (err: any) {
-      console.error("Live SMTP reply dispatch failed", err);
+      console.error("Reply dispatch failed via backend:", err);
       replyObj.status = "Failed";
-      showToast(`SMTP Fail: ${err.message || "Failed to dispatch email reply"}`, "error");
+      const errMsg = err?.response?.data?.error || err?.message || "Failed to send reply";
+      showToast(`Send failed: ${errMsg}`, "error");
     } finally {
       // Update active email structure in storage regardless
       const currentList = [...emails];
@@ -634,7 +609,7 @@ export default function MiniGmailPage() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full text-xs text-slate-600 border border-slate-200">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Gmail SMTP Live (23cs075@kpriet.ac.in)</span>
+              <span>Gmail SMTP Live ({SENDER_EMAIL})</span>
             </div>
           </div>
         </div>
@@ -1080,7 +1055,7 @@ export default function MiniGmailPage() {
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">From</span>
                   <div className="text-sm text-slate-700 font-semibold bg-slate-50 px-3 py-1.5 rounded border border-slate-100 flex items-center gap-2">
                     <User className="w-4 h-4 text-slate-400" />
-                    <span>Lead Draftsman &lt;draftsman@jasper.com&gt;</span>
+                    <span>{SENDER_NAME} &lt;{SENDER_EMAIL}&gt;</span>
                   </div>
                 </div>
 
