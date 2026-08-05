@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { getProjects, type EnterpriseProject } from "@/lib/api/projects";
 import apiClient from "@/lib/api/client";
+import { sendLiveSMTPEmail } from "./actions";
 
 // Target Companies & templates configuration
 const TARGET_COMPANIES = [
@@ -394,7 +395,7 @@ export default function MiniGmailPage() {
       subject: subjectField,
       body: bodyField,
       companyName: targetCompany || "Other",
-      attachments: composerAttachments.map(a => a.name)
+      attachments: composerAttachments
     };
 
     const newEmailObj: EmailMessage = {
@@ -414,28 +415,37 @@ export default function MiniGmailPage() {
     };
 
     try {
-      // POST API attempt
-      await apiClient.post(`/api/v1/projects/${id}/email/send/`, payload);
-      newEmailObj.status = "Delivered";
-      const updated = [newEmailObj, ...emails];
-      saveEmailsToStorage(updated);
-      showToast("Email dispatched successfully via API!", "success");
-    } catch (err) {
-      console.warn("Backend API send not implemented, executing local simulation...", err);
-      newEmailObj.status = "Sent";
-      const updated = [newEmailObj, ...emails];
-      saveEmailsToStorage(updated);
-      showToast("Transmittal email sent successfully (simulated)!", "success");
+      // Call Server Action for live SMTP transmission
+      const smtpRes = await sendLiveSMTPEmail(payload);
+      if (!smtpRes.success) {
+        throw new Error(smtpRes.error || "SMTP dispatch failed");
+      }
 
-      // Auto update status simulation
-      setTimeout(() => {
-        const currentList = JSON.parse(localStorage.getItem(`gmail_emails_${id}`) || "[]");
-        const idx = currentList.findIndex((item: EmailMessage) => item.id === newMsgId);
-        if (idx !== -1) {
-          currentList[idx].status = "Delivered";
-          saveEmailsToStorage(currentList);
-        }
-      }, 5000);
+      showToast(`Real email dispatched successfully via SMTP (${smtpRes.host})!`, "success");
+      newEmailObj.status = "Delivered";
+      
+      // Also notify backend API (if available) to save in Django db
+      try {
+        await apiClient.post(`/api/v1/projects/${id}/email/send/`, {
+          to: toField,
+          cc: ccField,
+          subject: subjectField,
+          body: bodyField,
+          companyName: targetCompany || "Other",
+          attachments: composerAttachments.map(a => a.name)
+        });
+      } catch (apiErr) {
+        console.warn("Could not sync with backend Django db, saved in local storage fallback only", apiErr);
+      }
+
+      const updated = [newEmailObj, ...emails];
+      saveEmailsToStorage(updated);
+    } catch (err: any) {
+      console.error("SMTP Live dispatch failed, executing local storage simulation...", err);
+      newEmailObj.status = "Failed";
+      const updated = [newEmailObj, ...emails];
+      saveEmailsToStorage(updated);
+      showToast(`SMTP Fail: ${err.message || "Could not connect to SMTP server"}`, "error");
     } finally {
       setSending(false);
       setComposing(false);
@@ -469,32 +479,51 @@ export default function MiniGmailPage() {
       replies: []
     };
 
-    // Update active email structure in storage
-    const currentList = [...emails];
-    const emailIndex = currentList.findIndex(item => item.id === selectedEmail.id);
-    if (emailIndex !== -1) {
-      const targetEmail = currentList[emailIndex];
-      targetEmail.replies = [...(targetEmail.replies || []), replyObj];
-      currentList[emailIndex] = { ...targetEmail };
-      saveEmailsToStorage(currentList);
-      setSelectedEmail({ ...targetEmail });
-    }
-
     try {
-      // API call placeholder for replies
-      const payload = {
+      // Call Server Action for live SMTP transmission
+      const smtpRes = await sendLiveSMTPEmail({
         to: replyObj.to,
+        cc: replyObj.cc,
         subject: replyObj.subject,
         body: replyObj.body,
-        companyName: replyObj.companyName,
-        attachments: replyAttachments.map(a => a.name)
-      };
-      await apiClient.post(`/api/v1/projects/${id}/email/send/`, payload);
-      showToast("Reply sent via API!", "success");
-    } catch (err) {
-      console.warn("Backend API reply simulation complete", err);
-      showToast("Reply sent (simulated)!", "success");
+        attachments: replyAttachments
+      });
+
+      if (!smtpRes.success) {
+        throw new Error(smtpRes.error || "SMTP dispatch failed");
+      }
+
+      showToast(`Reply sent successfully via live SMTP!`, "success");
+      replyObj.status = "Delivered";
+
+      // Try sync to Django backend
+      try {
+        await apiClient.post(`/api/v1/projects/${id}/email/send/`, {
+          to: replyObj.to,
+          subject: replyObj.subject,
+          body: replyObj.body,
+          companyName: replyObj.companyName,
+          attachments: replyAttachments.map(a => a.name)
+        });
+      } catch (apiErr) {
+        console.warn("Could not sync reply to Django backend", apiErr);
+      }
+    } catch (err: any) {
+      console.error("Live SMTP reply dispatch failed", err);
+      replyObj.status = "Failed";
+      showToast(`SMTP Fail: ${err.message || "Failed to dispatch email reply"}`, "error");
     } finally {
+      // Update active email structure in storage regardless
+      const currentList = [...emails];
+      const emailIndex = currentList.findIndex(item => item.id === selectedEmail.id);
+      if (emailIndex !== -1) {
+        const targetEmail = currentList[emailIndex];
+        targetEmail.replies = [...(targetEmail.replies || []), replyObj];
+        currentList[emailIndex] = { ...targetEmail };
+        saveEmailsToStorage(currentList);
+        setSelectedEmail({ ...targetEmail });
+      }
+
       setSending(false);
       setReplyMode(null);
       setReplyBody("");
