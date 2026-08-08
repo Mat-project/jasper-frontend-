@@ -871,8 +871,15 @@ export default function MiniGmailPage() {
                             <p className="font-medium truncate max-w-[180px]">{file.name}</p>
                             <p className="text-slate-400 text-xxs">{file.size}</p>
                           </div>
-                          {file.data && (
-                            <a href={file.data} download={file.name} className="p-1 text-slate-400 hover:text-slate-600 rounded" title="Download">
+                          {(file.url || file.data) && (
+                            <a
+                              href={file.url || file.data}
+                              download={file.name}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                              title="Download Attachment"
+                            >
                               <Download className="w-3.5 h-3.5" />
                             </a>
                           )}

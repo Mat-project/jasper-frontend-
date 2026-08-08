@@ -18,11 +18,24 @@ import {
   Heading,
   List,
   Link2,
-  Plus
+  Plus,
+  X,
+  FileSpreadsheet,
+  FileArchive,
+  FileCode,
+  Image as ImageIcon,
+  FileIcon,
 } from "lucide-react";
 import apiClient from "@/lib/api/client";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
+
+interface AttachmentFile {
+  name: string;
+  size: string;
+  type: string;
+  data?: string; // base64-encoded file content
+}
 
 interface EmailTransmittal {
   id: string;
@@ -84,6 +97,11 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
   const [activeRegVersion, setActiveRegVersion] = useState("1.0");
   const [loadingDrawings, setLoadingDrawings] = useState(false);
 
+  // Attachments State
+  const [customAttachments, setCustomAttachments] = useState<AttachmentFile[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Derived visible count helper for attachments size calculation
   const visibleRowsCount = selectedSubmission
     ? registerRows.filter(r => r.zip_package === selectedSubmission).length
@@ -101,6 +119,71 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
 
   // Textarea Ref for formatting
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Format bytes helper
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  // Read file as base64
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Add files handler
+  const handleAddFiles = async (fileList: FileList) => {
+    const filesArray: AttachmentFile[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const f = fileList[i];
+      try {
+        const base64 = await readFileAsBase64(f);
+        filesArray.push({
+          name: f.name,
+          size: formatBytes(f.size),
+          type: f.type || "application/octet-stream",
+          data: base64,
+        });
+      } catch (err) {
+        console.error("Failed to read file", err);
+        filesArray.push({ name: f.name, size: formatBytes(f.size), type: f.type || "application/octet-stream" });
+      }
+    }
+    setCustomAttachments(prev => [...prev, ...filesArray]);
+    showToast(`Attached ${filesArray.length} file(s)`, "success");
+  };
+
+  // Drag handlers
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = () => setIsDragOver(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleAddFiles(e.dataTransfer.files);
+    }
+  };
+
+  // File Icon helper
+  const getFileIcon = (fileName: string) => {
+    const ext = fileName.split(".").pop()?.toLowerCase();
+    switch (ext) {
+      case "pdf": return <FileText className="w-4 h-4 text-rose-500" />;
+      case "xlsx": case "xls": case "csv": return <FileSpreadsheet className="w-4 h-4 text-emerald-500" />;
+      case "zip": case "rar": return <FileArchive className="w-4 h-4 text-amber-500" />;
+      case "png": case "jpg": case "jpeg": case "gif": return <ImageIcon className="w-4 h-4 text-indigo-500" />;
+      case "dwg": case "dxf": case "cad": return <FileCode className="w-4 h-4 text-sky-500 font-bold" />;
+      default: return <FileIcon className="w-4 h-4 text-slate-400" />;
+    }
+  };
 
   // Initialize To, Cc, Bcc and Mail Number from project defaults
   useEffect(() => {
@@ -261,35 +344,36 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
 
   // Reactive email body compiler
   useEffect(() => {
-    if (!targetCompany) return;
-
-    const contactData = contacts.find(c => c.id.toString() === targetCompany);
-    if (contactData) {
-      // Use contact's emails for To, but keep project default CC/BCC
-      setToField(contactData.emails);
-      setCcField(project?.mail_cc || "");
-      setBccField(project?.mail_bcc || "");
-      const mailNum = localMailNumber || "MAIL-001";
-
-      setSubjectField(mailNum);
-
-      // ── Use ZIP filename heading instead of project name ──────────
-      // The client wants the descriptive heading from the ZIP filename
-      // (e.g. "BASEMENT-5 (POUR-H-1 B5) LIFT PIT REINFORCEMENT DETAILS")
-      // to appear in the email body instead of the project name.
-      // Fall back to project name if no submission is selected or the
-      // heading is not available.
-      const selectedSub = submissions.find(s => s.id === selectedSubmission);
-      const heading = selectedSub?.heading || selectedSub?.original_filename || project?.name || "Project";
-
-      let drawingListText = "";
-      if (drawings.length > 0) {
-        drawingListText = drawings.map((dwg, idx) => `${idx + 1}. ${dwg}`).join("\n");
-      } else {
-        drawingListText = "1. [No drawings found in this submission]";
+    let companyName = project?.client || "Client";
+    
+    if (targetCompany) {
+      const contactData = contacts.find(c => c.id.toString() === targetCompany);
+      if (contactData) {
+        // Use contact's emails for To, but keep project default CC/BCC
+        setToField(contactData.emails);
+        setCcField(project?.mail_cc || "");
+        setBccField(project?.mail_bcc || "");
+        companyName = contactData.company_name;
       }
+    }
 
-      const bodyText = `Dear ${contactData.company_name} Team,
+    const mailNum = localMailNumber || "MAIL-001";
+    setSubjectField(mailNum);
+
+    // ── Use ZIP filename heading instead of project name ──────────
+    // The client wants the descriptive heading from the ZIP filename
+    // to appear in the email body instead of the project name.
+    const selectedSub = submissions.find(s => s.id === selectedSubmission);
+    const heading = selectedSub?.heading || selectedSub?.original_filename || project?.name || "Project";
+
+    let drawingListText = "";
+    if (drawings.length > 0) {
+      drawingListText = drawings.map((dwg, idx) => `${idx + 1}. ${dwg}`).join("\n");
+    } else {
+      drawingListText = "1. [No drawings found in this submission]";
+    }
+
+    const bodyText = `Dear ${companyName} Team,
 
 Please click the link below to download the following drawings.
 
@@ -303,8 +387,7 @@ Thanks & Regards,
 ${project?.created_by?.first_name || 'Document Control'}
 Jasper Detailing Services`;
 
-      setBodyField(bodyText);
-    }
+    setBodyField(bodyText);
   }, [targetCompany, drawings, localMailNumber, contacts, project, submissions, selectedSubmission]);
 
   // Toast Helper
@@ -497,14 +580,22 @@ Jasper Detailing Services`;
     
     const targetContact = contacts.find(c => c.id.toString() === targetCompany);
 
+    // Build attachments payload (with real base64 file data)
+    const allAttachmentsPayload = customAttachments.map(a => ({
+      name: a.name,
+      size: a.size,
+      type: a.type,
+      data: a.data
+    }));
+
     const payload = {
       to: toField,
       cc: ccField,
       bcc: bccField,
       subject: subjectField,
       body: bodyField,
-      companyName: targetContact ? targetContact.company_name : "Other",
-      attachments: attachments.map(a => a.name)
+      companyName: targetContact ? targetContact.company_name : (project?.client || "Client"),
+      attachments: allAttachmentsPayload
     };
 
     try {
@@ -526,6 +617,7 @@ Jasper Detailing Services`;
       setBccField(project?.mail_bcc || "");
       setSubjectField("");
       setBodyField("");
+      setCustomAttachments([]);
     } catch (err: any) {
       console.error("Failed to send email via API", err);
       showToast(err.response?.data?.error || "Failed to dispatch email. Check SMTP setup.", "error");
@@ -782,13 +874,87 @@ Jasper Detailing Services`;
 
                 <textarea
                   ref={textareaRef}
-                  rows={20}
-                  placeholder="Select contact above to auto-fill format..."
+                  rows={14}
+                  placeholder="Transmittal notice message will appear here..."
                   value={bodyField}
                   onChange={e => setBodyField(e.target.value)}
                   required
                   className="w-full bg-white border border-slate-200 rounded-b-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition font-mono"
                 />
+              </div>
+
+              {/* Attachments Upload Dropzone */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Transmittal Attachments (Optional)</span>
+                  </label>
+                  <span className="text-xs text-slate-400 font-medium">
+                    {customAttachments.length} file{customAttachments.length === 1 ? "" : "s"} attached
+                  </span>
+                </div>
+
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition ${
+                    isDragOver
+                      ? "border-blue-500 bg-blue-50/50"
+                      : "border-slate-200 hover:border-blue-400 hover:bg-slate-50/60 bg-slate-50/30"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    multiple
+                    className="hidden"
+                    onChange={(e) => e.target.files && handleAddFiles(e.target.files)}
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded-full">
+                      <Paperclip className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs text-slate-700 font-medium">
+                      Drag &amp; drop attachments here, or <span className="text-blue-600 font-semibold hover:underline">browse files</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Supports PDF drawings, ZIP archives, DWG, Excel registers, BBS reports, and images
+                    </p>
+                  </div>
+                </div>
+
+                {customAttachments.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex flex-wrap gap-2">
+                      {customAttachments.map((file, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 shadow-2xs group"
+                        >
+                          {getFileIcon(file.name)}
+                          <span className="font-medium max-w-[220px] truncate" title={file.name}>
+                            {file.name}
+                          </span>
+                          <span className="text-slate-400 font-normal text-xxs">({file.size})</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCustomAttachments((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                            title="Remove attachment"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Send Button container */}
@@ -818,15 +984,23 @@ Jasper Detailing Services`;
         {/* Sidebar components block */}
         <div className="space-y-6">
           
-          {/* Attachment Register list component */}
+          {/* Attachment Register & Custom Files list component */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50">
+            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Paperclip className="w-4.5 h-4.5 text-slate-500" />
-                <h3 className="font-semibold text-slate-800 text-sm">Finalized Register Attachment</h3>
+                <h3 className="font-semibold text-slate-800 text-sm">Transmittal Bundle ({1 + customAttachments.length})</h3>
               </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-xs text-blue-600 font-semibold hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Attach
+              </button>
             </div>
             <div className="p-4 space-y-3">
+              {/* Auto Document Register */}
               {attachments.map(att => (
                 <div key={att.name} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition">
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -837,21 +1011,47 @@ Jasper Detailing Services`;
                       <p className="text-xs font-semibold text-slate-700 truncate" title={att.name}>
                         {att.name}
                       </p>
-                      <p className="text-[10px] text-slate-400 font-medium">{att.size}</p>
+                      <p className="text-[10px] text-emerald-600 font-medium">{att.size} • Auto-generated</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleDownloadRegisterCSV}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded transition"
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded transition cursor-pointer"
                     title="Download Copy"
                   >
                     <Download className="w-4 h-4" />
                   </button>
                 </div>
               ))}
+
+              {/* Custom Attached Files */}
+              {customAttachments.map((att, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-white hover:bg-slate-50 transition shadow-2xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-2 bg-slate-100 rounded-md shrink-0">
+                      {getFileIcon(att.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-700 truncate" title={att.name}>
+                        {att.name}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-medium">{att.size}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCustomAttachments(prev => prev.filter((_, i) => i !== idx))}
+                    className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                    title="Remove"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+
               <p className="text-[11px] text-slate-400 text-center italic mt-2">
-                * Transmittal notice will automatically append the Document Register attachment.
+                * All attached files will be dispatched as real email attachments to the client.
               </p>
             </div>
           </div>
