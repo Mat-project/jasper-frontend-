@@ -1,17 +1,19 @@
 import React from 'react';
-import { FilePlus, FileMinus, FileEdit } from 'lucide-react';
+import { FilePlus, FileMinus, FileEdit, FileCheck } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 interface ComparisonData {
   added: string[];
   removed: string[];
   modified: { drawingNumber: string; oldWeight?: number; newWeight?: number; oldRev?: string; newRev?: string }[];
+  unchanged?: string[];
 }
 
 export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFrom: number, vTo: number }) => {
   const added = data?.added || [];
   const removed = data?.removed || [];
   const modified = data?.modified || [];
+  const unchanged = data?.unchanged || [];
 
   return (
     <div className="flex flex-col h-full">
@@ -20,12 +22,9 @@ export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFr
           <h2 className="text-lg font-bold text-gray-900 mb-1">Revision Summary</h2>
           <p className="text-sm text-slate-500">Changes from Version {vFrom} to Version {vTo}</p>
         </div>
-        <button className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold transition-colors shadow-sm">
-          Generate Transmittal
-        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="p-5 rounded-xl bg-white border border-gray-200 shadow-sm flex flex-col gap-2">
           <div className="p-2 w-fit rounded-lg bg-emerald-50 text-emerald-600 mb-1">
             <FilePlus className="w-5 h-5" />
@@ -46,6 +45,13 @@ export const ComparisonView = ({ data, vFrom, vTo }: { data: ComparisonData, vFr
           </div>
           <div className="text-2xl font-bold text-gray-900">{modified.length}</div>
           <div className="text-sm font-medium text-slate-500">Updated Drawings</div>
+        </div>
+        <div className="p-5 rounded-xl bg-white border border-gray-200 shadow-sm flex flex-col gap-2">
+          <div className="p-2 w-fit rounded-lg bg-blue-50 text-blue-600 mb-1">
+            <FileCheck className="w-5 h-5" />
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{unchanged.length}</div>
+          <div className="text-sm font-medium text-slate-500">Unchanged Drawings</div>
         </div>
       </div>
 

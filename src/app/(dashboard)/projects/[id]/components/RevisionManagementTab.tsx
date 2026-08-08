@@ -59,7 +59,8 @@ export default function RevisionManagementTab({ projectId }: { projectId: string
               newRev: details.newRev
             };
           });
-        setComparisonData({ added, removed, modified });
+        const unchanged = items.filter((item: any) => item.change_type === 'Unchanged').map((item: any) => item.drawing_number);
+        setComparisonData({ added, removed, modified, unchanged });
       } catch (e) {
         console.error("Failed to load comparison", e);
         setComparisonData({ added: [], removed: [], modified: [] });

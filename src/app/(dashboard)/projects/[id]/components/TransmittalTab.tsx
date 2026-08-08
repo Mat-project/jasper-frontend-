@@ -219,7 +219,10 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
             const bNum = b.drawing_number || "";
             return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
           })
-          .map((row: any) => row.drawing_number);
+          .map((row: any) => {
+            const rev = row.drawing_rev ? ` (Rev ${row.drawing_rev})` : "";
+            return `${row.drawing_number}${rev}`;
+          });
         
         setDrawings(extracted);
       }

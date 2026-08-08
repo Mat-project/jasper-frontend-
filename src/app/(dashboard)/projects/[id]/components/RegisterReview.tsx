@@ -14,7 +14,11 @@ import {
   Trash2,
   Save,
   Check,
-  Download
+  Download,
+  ShieldCheck,
+  Award,
+  X,
+  Sparkles
 } from "lucide-react";
 import { Register, RegisterRow, updateWorkspace } from "@/lib/api/register_ai";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
@@ -69,6 +73,10 @@ export default function RegisterReview({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [showAllExceptions, setShowAllExceptions] = useState(false);
+  const [regState, setRegState] = useState<any>(register);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approvalNotes, setApprovalNotes] = useState("");
 
   // Shared workspace context — used for the Active Submission banner and to
   // keep the local submission selector in sync with the rest of the tabs.
@@ -78,6 +86,11 @@ export default function RegisterReview({
   const [selectedSubmission, setSelectedSubmission] = useState("");
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+
+  // Sync regState with prop changes
+  useEffect(() => {
+    setRegState(register);
+  }, [register]);
 
   // Sync with prop changes (e.g. initial load or post-save refetch)
   useEffect(() => {
@@ -362,6 +375,24 @@ export default function RegisterReview({
     }
   };
 
+  const handleApproveRegister = async () => {
+    setApproving(true);
+    try {
+      const { default: apiClient } = await import("@/lib/api/client");
+      const res = await apiClient.post(`/api/v1/projects/${projectId}/registers/${register.id}/approve/`, {
+        notes: approvalNotes
+      });
+      setRegState(res.data);
+      setShowApproveModal(false);
+      onSaveSuccess?.();
+    } catch (err: any) {
+      console.error("Failed to approve register", err);
+      alert(err.response?.data?.error || "Failed to sign off register. Please try again.");
+    } finally {
+      setApproving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <ActiveSubmissionBanner
@@ -370,6 +401,53 @@ export default function RegisterReview({
           submissions.find((s) => s.id === selectedSubmission)?.submission_no
         }
       />
+
+      {/* Approval Status Alert Banner */}
+      {regState?.is_approved ? (
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-900 p-4 rounded-xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-emerald-900">Document Register Formally Approved</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-200 text-emerald-800 rounded-full">
+                  Ready for Transmittal
+                </span>
+              </div>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                Signed off by <span className="font-semibold">{regState.approved_by_name || "Checker / Manager"}</span> on{" "}
+                {regState.approved_at ? new Date(regState.approved_at).toLocaleString() : new Date().toLocaleDateString()}
+                {regState.approval_notes ? ` — "${regState.approval_notes}"` : ""}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-white/80 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-2xs">
+            <Award className="h-4 w-4 text-emerald-600" />
+            V{regState.version_number} Certified
+          </div>
+        </div>
+      ) : (
+        <div className="bg-amber-50/70 border border-amber-200/80 text-amber-900 px-4 py-3 rounded-xl flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <p className="text-xs text-amber-800">
+              <span className="font-semibold">Review in Progress:</span> Verify drawing numbers and BBS weights below. A formal sign-off is recommended before client transmittal dispatch.
+            </p>
+          </div>
+          {!isReadOnly && (
+            <button
+              onClick={() => setShowApproveModal(true)}
+              className="text-xs font-bold text-amber-800 hover:text-amber-950 bg-amber-100 hover:bg-amber-200/80 px-3 py-1 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-amber-700" />
+              Sign Off / Approve
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -378,6 +456,15 @@ export default function RegisterReview({
             <span className="text-slate-400 font-normal text-base">
               v{register.version_number}
             </span>
+            {regState?.is_approved ? (
+              <span className="text-xs bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Approved
+              </span>
+            ) : (
+              <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200 font-semibold">
+                Draft (Pending Sign-off)
+              </span>
+            )}
             {isDirty && (
               <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200 font-semibold animate-pulse">
                 Unsaved Changes
@@ -419,6 +506,18 @@ export default function RegisterReview({
               </button>
             </>
           )}
+
+          {!isReadOnly && !regState?.is_approved && (
+            <button
+              onClick={() => setShowApproveModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all cursor-pointer"
+              title="Sign off and certify this register version"
+            >
+              <ShieldCheck className="h-4 w-4 text-blue-100" />
+              Approve Register
+            </button>
+          )}
+
           <button
             onClick={handleExportCSV}
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg text-sm font-bold shadow-md hover:shadow-lg transform transition-all active:scale-95"
@@ -438,6 +537,73 @@ export default function RegisterReview({
           )}
         </div>
       </div>
+
+      {/* Approve Register Modal */}
+      {showApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-scale-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-slate-900">Formally Approve Register</h4>
+                  <p className="text-xs text-slate-500">Sign off Register Version {register.version_number}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowApproveModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs text-slate-600 space-y-1.5">
+              <p className="font-semibold text-slate-800">Sign-off Confirmation:</p>
+              <p>• All drawing numbers, BBS references, and tonnages are verified.</p>
+              <p>• This register version will be certified for client transmittal dispatch.</p>
+              <p>• An audit log entry with your credentials will be recorded.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                Sign-off Notes / Remarks (Optional)
+              </label>
+              <textarea
+                value={approvalNotes}
+                onChange={(e) => setApprovalNotes(e.target.value)}
+                placeholder="e.g. Verified against architectural IFC set. Ready for client submission."
+                className="w-full text-xs p-3 rounded-lg border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 resize-none h-20"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowApproveModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={approving}
+                onClick={handleApproveRegister}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-xs font-bold shadow-md transition-all cursor-pointer"
+              >
+                {approving ? (
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                {approving ? "Certifying..." : "Confirm & Sign Off"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isReadOnly && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3 shadow-sm">

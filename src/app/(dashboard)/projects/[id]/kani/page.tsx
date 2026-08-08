@@ -31,6 +31,10 @@ import {
   RefreshCw,
   Trash2,
   Save,
+  RotateCcw,
+  Tag,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { getProjects, type EnterpriseProject } from "@/lib/api/projects";
 import apiClient from "@/lib/api/client";
@@ -62,6 +66,9 @@ interface EmailMessage {
   status: "Sent" | "Delivered" | "Failed" | "Read" | "Unread" | "Draft";
   replies: EmailMessage[];
   matchedSentEmailId?: string | null;
+  replyType?: "Unclassified" | "Acknowledgment" | "Revision Requested" | "General Query";
+  actioned?: boolean;
+  actionNotes?: string;
 }
 
 interface ContactCompany {
@@ -474,6 +481,60 @@ export default function MiniGmailPage() {
     }
   };
 
+  // Classify inbox email (Acknowledgment vs Revision Requested vs General)
+  const handleClassifyEmail = async (emailId: string, replyType: string) => {
+    try {
+      await apiClient.post(`/api/v1/projects/${id}/inbox/classify/`, {
+        id: emailId,
+        reply_type: replyType,
+      });
+      setEmails(prev => prev.map(e => e.id === emailId ? { ...e, replyType: replyType as any } : e));
+      if (selectedEmail && selectedEmail.id === emailId) {
+        setSelectedEmail(prev => prev ? { ...prev, replyType: replyType as any } : null);
+      }
+      showToast(`Classified as "${replyType}"`, "success");
+    } catch (err) {
+      showToast("Failed to classify email", "error");
+    }
+  };
+
+  // Trigger revision cycle from inbox feedback
+  const handleTriggerRevision = async (emailId: string) => {
+    try {
+      await apiClient.post(`/api/v1/projects/${id}/inbox/trigger-revision/`, {
+        id: emailId,
+        notes: `Client feedback received on ${new Date().toLocaleDateString()}`
+      });
+      setEmails(prev => prev.map(e => e.id === emailId ? { ...e, replyType: "Revision Requested", actioned: true } : e));
+      if (selectedEmail && selectedEmail.id === emailId) {
+        setSelectedEmail(prev => prev ? { ...prev, replyType: "Revision Requested", actioned: true } : null);
+      }
+      showToast("Revision cycle triggered! Project status updated and team alerted.", "success");
+    } catch (err) {
+      showToast("Failed to trigger revision cycle", "error");
+    }
+  };
+
+  // Export Inward Mail Register Excel
+  const handleExportInwardExcel = async () => {
+    try {
+      const response = await apiClient.get(`/api/v1/projects/${id}/inbox/export-excel/`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `JASPER_INWARD_REGISTER_${project?.code || id}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Downloaded inward correspondence register!", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to export inward mail register", "error");
+    }
+  };
+
   // Load draft into composer
   const handleLoadDraft = (draft: EmailMessage) => {
     setEditingDraftId(draft.id);
@@ -542,7 +603,15 @@ export default function MiniGmailPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={handlePollInbox} disabled={polling} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs text-slate-600 border border-slate-200 transition disabled:opacity-50">
+            <button
+              onClick={handleExportInwardExcel}
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-full text-xs font-semibold shadow-xs transition cursor-pointer"
+              title="Export all incoming correspondence as Excel register"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Inward Register (Excel)</span>
+            </button>
+            <button onClick={handlePollInbox} disabled={polling} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs text-slate-600 border border-slate-200 transition disabled:opacity-50 cursor-pointer">
               <RefreshCw className={`w-3.5 h-3.5 ${polling ? "animate-spin" : ""}`} />
               <span>{polling ? "Checking..." : "Check Gmail"}</span>
             </button>
@@ -650,16 +719,34 @@ export default function MiniGmailPage() {
                         </div>
                         <h4 className="text-sm text-slate-900 truncate mb-1">{item.subject || "(no subject)"}</h4>
                         <p className="text-xs text-slate-500 truncate leading-relaxed line-clamp-1">{item.body}</p>
-                        {item.attachments.length > 0 && (
-                          <div className="flex items-center gap-2 mt-2">
-                            {item.attachments.map((att, i) => (
+                        
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {item.replyType && item.replyType !== "Unclassified" && (
+                            <span className={`px-2 py-0.5 rounded-full text-xxs font-bold border ${
+                              item.replyType === "Revision Requested"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : item.replyType === "Acknowledgment"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            }`}>
+                              {item.replyType}
+                            </span>
+                          )}
+                          {item.actioned && (
+                            <span className="px-2 py-0.5 rounded-full text-xxs font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
+                              <RotateCcw className="w-2.5 h-2.5 text-slate-500" />
+                              Revision Triggered
+                            </span>
+                          )}
+                          {item.attachments.length > 0 && (
+                            item.attachments.map((att, i) => (
                               <div key={i} className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-xxs text-slate-600">
                                 <Paperclip className="w-3 h-3" />
                                 <span className="truncate max-w-[120px]">{att.name}</span>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -672,25 +759,84 @@ export default function MiniGmailPage() {
           {selectedEmail && !composing && (
             <div className="flex flex-col flex-1 overflow-y-auto max-h-[calc(100vh-200px)]">
               <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center sticky top-0 z-10">
-                <button onClick={() => setSelectedEmail(null)} className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:text-slate-800 bg-white rounded-lg text-xs hover:bg-slate-50 transition flex items-center gap-1.5">
+                <button onClick={() => setSelectedEmail(null)} className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:text-slate-800 bg-white rounded-lg text-xs hover:bg-slate-50 transition flex items-center gap-1.5 cursor-pointer">
                   <ChevronLeft className="w-4 h-4" /> Back
                 </button>
                 <div className="flex items-center gap-2">
                   {selectedEmail.folder === "inbox" && (
                     <>
-                      <button onClick={() => setReplyMode("reply")} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs transition flex items-center gap-1.5">
+                      <button onClick={() => setReplyMode("reply")} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
                         <CornerUpLeft className="w-4 h-4" /> Reply
                       </button>
-                      <button onClick={() => setReplyMode("replyAll")} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs transition flex items-center gap-1.5">
+                      <button onClick={() => setReplyMode("replyAll")} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
                         <Mail className="w-4 h-4" /> Reply All
                       </button>
                     </>
                   )}
-                  <button onClick={() => handleDeleteEmail(selectedEmail.id, selectedEmail.folder)} className="px-3 py-1.5 border border-slate-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs transition flex items-center gap-1.5">
+                  <button onClick={() => handleDeleteEmail(selectedEmail.id, selectedEmail.folder)} className="px-3 py-1.5 border border-slate-200 text-rose-600 hover:bg-rose-50 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer">
                     <Trash2 className="w-4 h-4" /> Delete
                   </button>
                 </div>
               </div>
+
+              {/* Inward Classification & Revision Loop Action Banner */}
+              {selectedEmail.folder === "inbox" && (
+                <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                      <Tag className="w-3.5 h-3.5 text-slate-400" />
+                      Classification:
+                    </span>
+                    <button
+                      onClick={() => handleClassifyEmail(selectedEmail.id, "Acknowledgment")}
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold border transition cursor-pointer ${
+                        selectedEmail.replyType === "Acknowledgment"
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
+                      }`}
+                    >
+                      ✓ Acknowledgment
+                    </button>
+                    <button
+                      onClick={() => handleClassifyEmail(selectedEmail.id, "Revision Requested")}
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold border transition cursor-pointer ${
+                        selectedEmail.replyType === "Revision Requested"
+                          ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700"
+                      }`}
+                    >
+                      🔄 Revision Requested
+                    </button>
+                    <button
+                      onClick={() => handleClassifyEmail(selectedEmail.id, "General Query")}
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold border transition cursor-pointer ${
+                        selectedEmail.replyType === "General Query"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700"
+                      }`}
+                    >
+                      💬 General
+                    </button>
+                  </div>
+
+                  {selectedEmail.replyType === "Revision Requested" && !selectedEmail.actioned && (
+                    <button
+                      onClick={() => handleTriggerRevision(selectedEmail.id)}
+                      className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-lg text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Trigger Revision Cycle &amp; Alert Drafters
+                    </button>
+                  )}
+
+                  {selectedEmail.actioned && (
+                    <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      Revision Cycle Active
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="p-6 border-b border-slate-100">
                 <h3 className="text-base font-bold text-slate-800 mb-4">{selectedEmail.subject}</h3>
