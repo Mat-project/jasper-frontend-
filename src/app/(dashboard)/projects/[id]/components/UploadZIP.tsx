@@ -99,7 +99,7 @@ export default function UploadZIP({
           <div>
             <p className="font-semibold text-sm">Last Processing Job Failed</p>
             <p className="text-xs text-red-700 mt-1">
-              {toErrorString(lastJob.error_message)}
+              {toErrorString(lastJob.error_reason || lastJob.last_error_message)}
             </p>
           </div>
         </div>

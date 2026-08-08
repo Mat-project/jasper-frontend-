@@ -174,36 +174,39 @@ export default function RegisterReview({
 
   const handleExportCSV = () => {
     const headers = [
-      "Drawing Number",
-      "Drawing Title",
-      "BBS Number",
-      "Total Weight (kg)",
-      "Sheet No",
-      "Drawing Rev",
-      "BBS Rev",
-      "Drawn By",
-      "Checked By",
-      "Section",
-      "Remarks",
-      "Submission"
+      "S.No.",
+      "DRAWING NUMBER",
+      "DRAWING TITLE",
+      "SHEET",
+      "BBS NO",
+      "FINAL-REV",
+      "WEIGHT",
+      "DATE",
+      "MAIL No.",
+      "STATUS",
+      "DRAWN BY",
+      "SHEET SIZE"
     ];
     
-    const subMap = new Map(submissions.map(s => [s.id, s.submission_no]));
-    
-    const csvRows = visibleRows.map(row => [
-      `"${(row.drawing_number || '').replace(/"/g, '""')}"`,
-      `"${(row.drawing_title || '').replace(/"/g, '""')}"`,
-      `"${(row.bbs_numbers || '').replace(/"/g, '""')}"`,
-      `"${row.total_weight ?? ''}"`,
-      `"${(row.sheet_no || '').replace(/"/g, '""')}"`,
-      `"${(row.drawing_rev || '').replace(/"/g, '""')}"`,
-      `"${(row.bbs_revs || '').replace(/"/g, '""')}"`,
-      `"${(row.drawn_by || '').replace(/"/g, '""')}"`,
-      `"${(row.checked_by || '').replace(/"/g, '""')}"`,
-      `"${(row.section || '').replace(/"/g, '""')}"`,
-      `"${(row.remarks || '').replace(/"/g, '""')}"`,
-      `"${subMap.get(row.zip_package || '') || 'Initial Submission'}"`
-    ]);
+    const csvRows = visibleRows.map((row, index) => {
+      const status = row.dynamic_fields?.status || "NEW";
+      const sheetSize = row.dynamic_fields?.sheet_size || "A1";
+      
+      return [
+        `"${index + 1}"`,
+        `"${(row.drawing_number || '').replace(/"/g, '""')}"`,
+        `"${(row.drawing_title || '').replace(/"/g, '""')}"`,
+        `"${(row.sheet_no || '').replace(/"/g, '""')}"`,
+        `"${(row.bbs_numbers || '').replace(/"/g, '""')}"`,
+        `"${(row.drawing_rev || '').replace(/"/g, '""')}"`,
+        `"${row.total_weight ?? ''}"`,
+        `"${(row.date || '').replace(/"/g, '""')}"`,
+        `"${(row.mail_no || '').replace(/"/g, '""')}"`,
+        `"${status.replace(/"/g, '""')}"`,
+        `"${(row.drawn_by || '').replace(/"/g, '""')}"`,
+        `"${sheetSize.replace(/"/g, '""')}"`
+      ];
+    });
     
     const csvContent = [
       headers.join(","),
@@ -418,10 +421,10 @@ export default function RegisterReview({
           )}
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 bg-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
-            title="Download cumulative register as Excel/CSV"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg text-sm font-bold shadow-md hover:shadow-lg transform transition-all active:scale-95"
+            title="Download cumulative register as CSV"
           >
-            <Download className="h-4 w-4 text-emerald-600" />
+            <Download className="h-5 w-5 text-emerald-50" />
             Download Register (CSV)
           </button>
           {!isReadOnly && (
