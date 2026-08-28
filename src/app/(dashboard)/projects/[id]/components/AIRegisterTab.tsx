@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import UploadZIP from "./UploadZIP";
 import ProcessingStatus from "./ProcessingStatus";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
@@ -8,12 +8,13 @@ import { getAccessToken, getBaseUrl } from "@/lib/api/client";
 import { useProjectWorkspace } from "../WorkspaceProvider";
 
 export default function AIRegisterTab({ project }: { project: any }) {
+  const [jobId, setJobId] = useState<string | null>(null);
   const [jobState, setJobState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const prevJobState = useRef<any>(null);
 
   // Shared workspace context — single source of truth for the active
-  // submission across all Register AI tabs. The provider loads it once.
+  // submission across all Register AI tabs.
   const { workspace } = useProjectWorkspace();
 
   useEffect(() => {
@@ -23,15 +24,13 @@ export default function AIRegisterTab({ project }: { project: any }) {
       jobState &&
       jobState.job_state === "Completed"
     ) {
-      // Notify the rest of the page (WorkspaceProvider + page-level handler)
-      // that a ZIP has finished processing. The backend has already set the
-      // new submission as active; listeners will refresh workspace state.
       window.dispatchEvent(new Event("zip-processing-completed"));
     }
     prevJobState.current = jobState;
   }, [jobState]);
 
-  const fetchStatus = async () => {
+  // Fetch status helper — returns IDLE on 404 without throwing console errors
+  const fetchStatus = useCallback(async () => {
     try {
       const token = getAccessToken();
       const baseUrl = getBaseUrl();
@@ -40,31 +39,97 @@ export default function AIRegisterTab({ project }: { project: any }) {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (res.status === 404) {
+        return { state: "IDLE", job_state: "IDLE" };
+      }
+
       if (res.ok) {
         const data = await res.json();
-        setJobState(data);
-      } else {
-        setJobState(null);
+        return data;
       }
+      return { state: "IDLE", job_state: "IDLE" };
     } catch (e) {
-      console.error(e);
+      return { state: "IDLE", job_state: "IDLE" };
     }
-  };
+  }, [project.id]);
 
+  // Initial load check (runs once on mount)
   useEffect(() => {
+    let isMounted = true;
     const initializeTab = async () => {
-      await fetchStatus();
+      const data = await fetchStatus();
+      if (!isMounted) return;
+
+      if (data && data.job_id && data.state !== "IDLE" && data.job_state !== "IDLE") {
+        setJobState(data);
+        const stateUpper = (data.job_state || "").toUpperCase();
+        // Only set jobId to start polling if job is currently active
+        if (!["COMPLETED", "FAILED", "CANCELLED"].includes(stateUpper)) {
+          setJobId(data.job_id);
+        }
+      } else {
+        setJobState({ state: "IDLE", job_state: "IDLE" });
+      }
       setLoading(false);
     };
 
     initializeTab();
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchStatus]);
 
-    const interval = setInterval(() => {
-      fetchStatus();
-    }, 3000);
+  // Requirement 1, 2, 5: Polling effect driven by jobId
+  useEffect(() => {
+    // Only start polling if jobId exists
+    if (!jobId) return;
 
-    return () => clearInterval(interval);
-  }, [project.id]);
+    let isMounted = true;
+
+    const poll = async () => {
+      const data = await fetchStatus();
+      if (!isMounted) return;
+
+      if (!data || data.state === "IDLE" || data.job_state === "IDLE") {
+        setJobState({ state: "IDLE", job_state: "IDLE" });
+        setJobId(null); // Stop polling if job not found / IDLE
+        return;
+      }
+
+      setJobState(data);
+      const stateUpper = (data.job_state || "").toUpperCase();
+
+      // Requirement 2: Stop polling when job reaches COMPLETED, FAILED, or CANCELLED
+      if (["COMPLETED", "FAILED", "CANCELLED"].includes(stateUpper)) {
+        setJobId(null);
+      }
+    };
+
+    const intervalId = setInterval(poll, 3000);
+
+    // Requirement 5: Clear interval on unmount or when jobId changes
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [jobId, fetchStatus]);
+
+  const handleUploadSuccess = (newJobId?: string) => {
+    if (newJobId) {
+      setJobId(newJobId);
+    } else {
+      fetchStatus().then((data) => {
+        if (data && data.job_id) {
+          setJobState(data);
+          const stateUpper = (data.job_state || "").toUpperCase();
+          if (!["COMPLETED", "FAILED", "CANCELLED"].includes(stateUpper)) {
+            setJobId(data.job_id);
+          }
+        }
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -74,8 +139,12 @@ export default function AIRegisterTab({ project }: { project: any }) {
     );
   }
 
-  // If a job exists and is not Completed/Failed, show processing status.
-  const isProcessing = jobState && !["Completed", "Failed"].includes(jobState.job_state);
+  // Show processing status if job is active and in progress
+  const stateUpper = (jobState?.job_state || "").toUpperCase();
+  const isProcessing =
+    jobState &&
+    jobState.job_state !== "IDLE" &&
+    !["COMPLETED", "FAILED", "CANCELLED"].includes(stateUpper);
 
   return (
     <div className="space-y-4">
@@ -93,9 +162,7 @@ export default function AIRegisterTab({ project }: { project: any }) {
         ) : (
           <UploadZIP
             project={project}
-            onUploadSuccess={() => {
-              fetchStatus();
-            }}
+            onUploadSuccess={handleUploadSuccess}
             lastJob={jobState}
           />
         )}

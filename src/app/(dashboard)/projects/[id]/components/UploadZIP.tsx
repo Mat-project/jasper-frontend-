@@ -25,7 +25,7 @@ export default function UploadZIP({
   lastJob,
 }: {
   project: any;
-  onUploadSuccess: () => void;
+  onUploadSuccess: (jobId?: string) => void;
   lastJob: any;
 }) {
   const [file, setFile] = useState<File | null>(null);
@@ -59,9 +59,10 @@ export default function UploadZIP({
       );
 
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         setFile(null);
         window.dispatchEvent(new Event("zip-upload-started"));
-        onUploadSuccess();
+        onUploadSuccess(data.job_id);
       } else {
         const data = await res.json().catch(() => ({}));
         // Always convert to string — never store raw object in state
