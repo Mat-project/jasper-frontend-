@@ -1,8 +1,12 @@
 import type { NextConfig } from "next";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const nextConfig: NextConfig = {
   // ── Production Output & Optimization ──────────────────────────────────────
-  output: "standalone",
+  // Only use standalone output in production — it traces all imports and
+  // consumes significant memory, causing OOM errors in dev mode.
+  ...(isProduction && { output: "standalone" }),
   reactStrictMode: true,
 
   // ── Remote Image Domains ───────────────────────────────────────────────────
