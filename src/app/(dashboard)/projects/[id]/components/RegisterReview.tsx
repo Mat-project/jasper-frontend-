@@ -231,8 +231,9 @@ export default function RegisterReview({
     const link = document.createElement("a");
     link.setAttribute("href", url);
     
-    const filename = selectedSubmission 
-      ? `JASPER_DOCUMENT_REGISTER_v${register.version_number}_${subMap.get(selectedSubmission) || 'SUB'}.csv`
+    const subNo = submissions.find((s) => s.id === selectedSubmission)?.submission_no || 'SUB';
+    const filename = selectedSubmission
+      ? `JASPER_DOCUMENT_REGISTER_v${register.version_number}_${subNo}.csv`
       : `JASPER_DOCUMENT_REGISTER_v${register.version_number}_Master.csv`;
       
     link.setAttribute("download", filename);
