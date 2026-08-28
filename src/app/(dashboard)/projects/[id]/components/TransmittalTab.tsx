@@ -35,6 +35,7 @@ interface AttachmentFile {
   size: string;
   type: string;
   data?: string; // base64-encoded file content
+  url?: string;
 }
 
 interface EmailTransmittal {

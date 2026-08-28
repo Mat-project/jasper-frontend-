@@ -49,6 +49,7 @@ interface AttachmentFile {
   size: string;
   type: string;
   data?: string; // base64-encoded file content for real uploads
+  url?: string;
 }
 
 interface EmailMessage {
