@@ -37,23 +37,20 @@ const nextConfig: NextConfig = {
         hostname: "*.s3.*.amazonaws.com",
         pathname: "/**",
       },
-      {
-        protocol: "http",
-        hostname: "localhost",
-        port: "8000",
-        pathname: "/media/**",
-      },
     ],
   },
 
-  // ── API Proxy (dev fallback) ──────────────────────────────────────────────
+  // ── API Proxy (environment based) ─────────────────────────────────────────
   async rewrites() {
-    return [
-      {
-        source: "/api-proxy/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/:path*`,
-      },
-    ];
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+    return apiUrl
+      ? [
+          {
+            source: "/api-proxy/:path*",
+            destination: `${apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl}/:path*`,
+          },
+        ]
+      : [];
   },
 
   // ── Security Headers ─────────────────────────────────────────────────────

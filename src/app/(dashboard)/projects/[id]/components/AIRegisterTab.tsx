@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import UploadZIP from "./UploadZIP";
 import ProcessingStatus from "./ProcessingStatus";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
-import { getAccessToken } from "@/lib/api/client";
+import { getAccessToken, getBaseUrl } from "@/lib/api/client";
 import { useProjectWorkspace } from "../WorkspaceProvider";
 
 export default function AIRegisterTab({ project }: { project: any }) {
@@ -34,7 +34,8 @@ export default function AIRegisterTab({ project }: { project: any }) {
   const fetchStatus = async () => {
     try {
       const token = getAccessToken();
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${project.id}/processing-status/`, {
+      const baseUrl = getBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/projects/${project.id}/processing-status/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

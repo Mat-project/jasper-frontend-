@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getSystemSettings, updateSystemSetting, createSystemSetting, uploadCompanyFile } from "@/lib/api/settings";
+import { getBaseUrl } from "@/lib/api/client";
 import { Settings, ShieldAlert, Users2, Save, CheckCircle, RefreshCw, Building2, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -381,7 +382,7 @@ export default function SettingsPage() {
                     <label className="text-xs font-semibold text-foreground">Company Logo</label>
                     <div className="flex items-center gap-4">
                       {companyValues.logo_url && (
-                        <img src={`http://localhost:8000${companyValues.logo_url}`} alt="Logo" className="h-12 w-auto object-contain bg-slate-50 p-1 rounded border border-border" />
+                        <img src={companyValues.logo_url.startsWith("http") ? companyValues.logo_url : `${getBaseUrl()}${companyValues.logo_url}`} alt="Logo" className="h-12 w-auto object-contain bg-slate-50 p-1 rounded border border-border" />
                       )}
                       <label className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-border hover:bg-slate-100 rounded text-xs font-medium text-slate-700">
                         <UploadCloud className="h-4 w-4" /> Upload Logo
@@ -393,7 +394,7 @@ export default function SettingsPage() {
                     <label className="text-xs font-semibold text-foreground">Authorized Signature</label>
                     <div className="flex items-center gap-4">
                       {companyValues.signature_url && (
-                        <img src={`http://localhost:8000${companyValues.signature_url}`} alt="Signature" className="h-12 w-auto object-contain bg-slate-50 p-1 rounded border border-border" />
+                        <img src={companyValues.signature_url.startsWith("http") ? companyValues.signature_url : `${getBaseUrl()}${companyValues.signature_url}`} alt="Signature" className="h-12 w-auto object-contain bg-slate-50 p-1 rounded border border-border" />
                       )}
                       <label className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-border hover:bg-slate-100 rounded text-xs font-medium text-slate-700">
                         <UploadCloud className="h-4 w-4" /> Upload Signature

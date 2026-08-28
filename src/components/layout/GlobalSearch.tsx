@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, Loader2, FileText, FolderKanban, History, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getAccessToken } from "@/lib/api/client";
+import { getAccessToken, getBaseUrl } from "@/lib/api/client";
 
 interface SearchResult {
   id: string;
@@ -48,7 +48,8 @@ export function GlobalSearch() {
     try {
       const token = getAccessToken();
       if (!token) return;
-      const res = await fetch("http://localhost:8000/api/v1/search/history/", {
+      const baseUrl = getBaseUrl();
+      const res = await fetch(`${baseUrl}/api/v1/search/history/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -79,7 +80,8 @@ export function GlobalSearch() {
       setLoading(true);
       try {
         const token = getAccessToken();
-        const res = await fetch(`http://localhost:8000/api/v1/search/?q=${encodeURIComponent(debouncedQuery)}`, {
+        const baseUrl = getBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/search/?q=${encodeURIComponent(debouncedQuery)}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         

@@ -130,7 +130,7 @@ export async function getRelationships(projectId: string): Promise<Relationship[
     if (data && typeof data === 'object' && 'results' in data) {
       all.push(...(data.results as Relationship[]));
       // Extract just the path+query from the next URL to avoid
-      // cross-origin issues (e.g. next URL has http://localhost:8000
+      // cross-origin issues (e.g. next URL has backend origin
       // but the browser might be accessing via a different host).
       const nextUrl = data.next as string | null;
       if (nextUrl) {

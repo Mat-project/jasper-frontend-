@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { UploadCloud, CheckCircle2, AlertCircle, X } from "lucide-react";
-import { getAccessToken } from "@/lib/api/client";
+import { getAccessToken, getBaseUrl } from "@/lib/api/client";
 
 /** Safely converts any error value (string, object, Error) to a displayable string */
 function toErrorString(err: unknown): string {
@@ -48,8 +48,9 @@ export default function UploadZIP({
     formData.append("file", file);
 
     try {
+      const baseUrl = getBaseUrl();
       const res = await fetch(
-        `http://localhost:8000/api/v1/projects/${project.id}/upload/`,
+        `${baseUrl}/api/v1/projects/${project.id}/upload/`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${getAccessToken()}` },

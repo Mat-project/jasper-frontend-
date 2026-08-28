@@ -14,12 +14,12 @@ import Cookies from "js-cookie";
 const TOKEN_KEY = "eoms_access";
 const REFRESH_KEY = "eoms_refresh";
 
-const getBaseUrl = (): string => {
-  const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
+export const getBaseUrl = (): string => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
   if (envUrl) {
     return envUrl.endsWith("/") ? envUrl.slice(0, -1) : envUrl;
   }
-  return "http://localhost:8000";
+  return "";
 };
 
 // ── Create axios instance ────────────────────────────────────────────────────
