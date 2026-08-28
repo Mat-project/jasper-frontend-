@@ -1,12 +1,38 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // ── Output ──────────────────────────────────────────────────────────────
+  // ── Production Output & Optimization ──────────────────────────────────────
   output: "standalone",
+  reactStrictMode: true,
 
-  // ── Images ──────────────────────────────────────────────────────────────
+  // ── Remote Image Domains ───────────────────────────────────────────────────
   images: {
     remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "backend-production-8203.up.railway.app",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "eoms-production-storage.s3.ap-south-1.amazonaws.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "*.s3.amazonaws.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "*.s3.*.amazonaws.com",
+        pathname: "/**",
+      },
       {
         protocol: "http",
         hostname: "localhost",
@@ -16,12 +42,12 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // ── API Proxy (dev) ──────────────────────────────────────────────────────
+  // ── API Proxy (dev fallback) ──────────────────────────────────────────────
   async rewrites() {
     return [
       {
         source: "/api-proxy/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://backend:8000"}/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/:path*`,
       },
     ];
   },
