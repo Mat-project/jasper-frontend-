@@ -187,37 +187,37 @@ export default function RegisterReview({
 
   const handleExportCSV = () => {
     const headers = [
-      "S.No.",
-      "DRAWING NUMBER",
-      "DRAWING TITLE",
-      "SHEET",
-      "BBS NO",
-      "FINAL-REV",
-      "WEIGHT",
-      "DATE",
-      "MAIL No.",
-      "STATUS",
-      "DRAWN BY",
-      "SHEET SIZE"
+      "Project Name",
+      "Status",
+      "Drawing Number",
+      "Rev",
+      "Description",
+      "Sheet",
+      "BBS Reference Number",
+      "Rev",
+      "Weight/Qty"
     ];
-    
-    const csvRows = visibleRows.map((row, index) => {
+
+    const csvRows = visibleRows.map((row) => {
       const status = row.dynamic_fields?.status || "NEW";
-      const sheetSize = row.dynamic_fields?.sheet_size || "A1";
-      
+
+      // Phase 9: Strip leading zeros from revision (00 -> 0, 01 -> 1)
+      const stripRevZeros = (rev: string) => {
+        if (!rev) return "";
+        const n = parseInt(rev, 10);
+        return isNaN(n) ? rev : String(n);
+      };
+
       return [
-        `"${index + 1}"`,
+        `"${(row.drawing_title || '').replace(/"/g, '""')}"`,
+        `"${status.replace(/"/g, '""')}"`,
         `"${(row.drawing_number || '').replace(/"/g, '""')}"`,
+        `"${stripRevZeros(row.drawing_rev || '').replace(/"/g, '""')}"`,
         `"${(row.drawing_title || '').replace(/"/g, '""')}"`,
         `"${(row.sheet_no || '').replace(/"/g, '""')}"`,
         `"${(row.bbs_numbers || '').replace(/"/g, '""')}"`,
-        `"${(row.drawing_rev || '').replace(/"/g, '""')}"`,
-        `"${row.total_weight ?? ''}"`,
-        `"${(row.date || '').replace(/"/g, '""')}"`,
-        `"${(row.mail_no || '').replace(/"/g, '""')}"`,
-        `"${status.replace(/"/g, '""')}"`,
-        `"${(row.drawn_by || '').replace(/"/g, '""')}"`,
-        `"${sheetSize.replace(/"/g, '""')}"`
+        `"${stripRevZeros(row.bbs_revs || '').replace(/"/g, '""')}"`,
+        `"${row.total_weight ?? ''}"`
       ];
     });
     
