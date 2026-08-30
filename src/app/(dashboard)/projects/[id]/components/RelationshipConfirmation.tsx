@@ -551,14 +551,19 @@ export default function RelationshipConfirmation({
         <select
           value={selectedSubmission}
           onChange={(e) => setSelectedSubmission(e.target.value)}
-          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm text-slate-800 font-medium transition-all shadow-sm outline-none cursor-pointer"
+          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 rounded-lg text-sm text-slate-800 font-medium transition-all shadow-sm outline-none cursor-pointer truncate max-w-full"
         >
           <option value="">-- All Submissions --</option>
-          {submissions.map((sub) => (
-            <option key={sub.id} value={sub.id}>
-              {sub.submission_no} - {sub.original_filename} ({new Date(sub.created_at).toLocaleDateString()})
-            </option>
-          ))}
+          {submissions.map((sub) => {
+            const fname = sub.original_filename.length > 50 
+              ? sub.original_filename.substring(0, 47) + "..." 
+              : sub.original_filename;
+            return (
+              <option key={sub.id} value={sub.id}>
+                {sub.submission_no} - {fname} ({new Date(sub.created_at).toLocaleDateString()})
+              </option>
+            );
+          })}
         </select>
       </div>
 
@@ -572,14 +577,14 @@ export default function RelationshipConfirmation({
 
       {/* Bulk confirm toolbar */}
       {highConf.length > 0 && (
-        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
-          <div className="flex items-center gap-2 text-blue-700">
-            <Zap className="h-4 w-4" />
+        <div className="flex items-center justify-between bg-brand-50 border border-brand-200 rounded-xl px-5 py-3">
+          <div className="flex items-center gap-2 text-brand-700">
+            <Zap className="h-4 w-4 text-brand-500" />
             <span className="text-sm font-semibold">{highConf.length} relationships have ≥90% confidence</span>
           </div>
           <button
             onClick={bulkConfirm}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
           >
             <Zap className="h-4 w-4" />
             Bulk Confirm High Confidence
@@ -592,8 +597,12 @@ export default function RelationshipConfirmation({
         {filteredRelationships.length > 0 ? (
           filteredRelationships.map(renderRow)
         ) : (
-          <div className="py-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
-            No relationships found for the selected submission.
+          <div className="py-10 px-4 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+            <Package className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm font-medium text-slate-600">No AI relationships proposed for this submission.</p>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+              If this package contains standalone drawing sheets without BBS files, click <strong>Generate Register</strong> below to compile drawing sheets directly.
+            </p>
           </div>
         )}
       </div>
@@ -610,14 +619,14 @@ export default function RelationshipConfirmation({
             {pending.length > 0
               ? `${pending.length} relationship(s) still pending. Resolve all before generating.`
               : filteredRelationships.length === 0
-              ? "No relationships proposed. Generate the register anyway to manually input drawings for this submission."
+              ? "No relationships proposed. Compile the register directly to review drawing sheets for this submission."
               : "All relationships have been reviewed. Click to compile the Register."}
           </p>
         </div>
         <button
           onClick={handleGenerate}
           disabled={!allResolved || generating}
-          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-2"
+          className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-2"
         >
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
           {generating ? "Generating..." : "Generate Register"}

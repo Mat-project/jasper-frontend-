@@ -9,24 +9,13 @@ import {
   Building,
   Layers,
   ShieldCheck,
-  Tags,
   FolderKanban,
-  Clock,
-  Factory,
-  ClipboardSignature,
-  FileCheck2,
-  History,
-  FileText,
-  GitBranch,
-  BarChart3,
   Settings,
   Shield,
   FileSpreadsheet,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
-  CreditCard,
-  DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -199,7 +188,7 @@ export function Sidebar() {
     },
     { label: "Projects", href: "/projects", icon: FolderKanban },
     // { label: "Commercial", href: "/commercial", icon: DollarSign }, // Disabled per client priority
-    { label: "Attendance", href: "/attendance", icon: Clock },
+    // { label: "Attendance", href: "/attendance", icon: Clock }, // Disabled per client request
     // { label: "Payroll", href: "/payroll", icon: CreditCard }, // Disabled per client priority
     /*
     {

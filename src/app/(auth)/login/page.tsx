@@ -1,15 +1,14 @@
 "use client";
 
-/**
- * Login page — Sprint 0 shell.
- */
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
 import type { LoginCredentials } from "@/types/user";
 
 export default function LoginPage() {
   const { login, isLoading } = useAuth();
   const [form, setForm] = useState<LoginCredentials>({ email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -17,12 +16,23 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(form);
-    } catch (err: unknown) {
-      const apiError = err as { response?: { data?: { error?: { message?: string } } } };
-      setError(
-        apiError?.response?.data?.error?.message ||
-          "Invalid credentials. Please try again."
-      );
+    } catch (err: any) {
+      const data = err?.response?.data;
+      let errorMsg = "Invalid credentials. Please check your email and password.";
+      if (data) {
+        if (typeof data.detail === "string") {
+          errorMsg = data.detail;
+        } else if (Array.isArray(data.non_field_errors) && data.non_field_errors.length > 0) {
+          errorMsg = data.non_field_errors[0];
+        } else if (typeof data.error === "string") {
+          errorMsg = data.error;
+        } else if (typeof data.message === "string") {
+          errorMsg = data.message;
+        } else if (data.error?.message) {
+          errorMsg = data.error.message;
+        }
+      }
+      setError(errorMsg);
     }
   };
 
@@ -40,7 +50,7 @@ export default function LoginPage() {
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm px-4 py-3">
+          <div className="rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm px-4 py-3 animate-fade-in">
             {error}
           </div>
         )}
@@ -55,8 +65,11 @@ export default function LoginPage() {
             autoComplete="email"
             required
             value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            className="w-full rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/40 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition"
+            onChange={(e) => {
+              if (error) setError(null);
+              setForm((f) => ({ ...f, email: e.target.value }));
+            }}
+            className="w-full rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition"
             placeholder="you@company.com"
           />
         </div>
@@ -65,16 +78,33 @@ export default function LoginPage() {
           <label htmlFor="password" className="block text-sm font-medium text-white/80">
             Password
           </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={form.password}
-            onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-            className="w-full rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/40 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition"
-            placeholder="••••••••"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={form.password}
+              onChange={(e) => {
+                if (error) setError(null);
+                setForm((f) => ({ ...f, password: e.target.value }));
+              }}
+              className="w-full rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition"
+              placeholder="••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded p-1"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+            </button>
+          </div>
         </div>
 
         <button

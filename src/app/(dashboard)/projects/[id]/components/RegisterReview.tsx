@@ -737,14 +737,19 @@ export default function RegisterReview({
             <select
               value={selectedSubmission}
               onChange={(e) => setSelectedSubmission(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-medium outline-none cursor-pointer focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-medium outline-none cursor-pointer focus:border-brand-500 focus:ring-1 focus:ring-brand-500 max-w-[260px] truncate"
             >
               <option value="">-- All Submissions --</option>
-              {submissions.map((sub) => (
-                <option key={sub.id} value={sub.id}>
-                  {sub.submission_no} - {sub.original_filename}
-                </option>
-              ))}
+              {submissions.map((sub) => {
+                const fname = sub.original_filename.length > 35
+                  ? sub.original_filename.substring(0, 32) + "..."
+                  : sub.original_filename;
+                return (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.submission_no} - {fname}
+                  </option>
+                );
+              })}
             </select>
             <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
               Interactive Sheet

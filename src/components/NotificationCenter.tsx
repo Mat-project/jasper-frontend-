@@ -357,17 +357,18 @@ export function NotificationCenter() {
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex-1 min-w-0 pr-1">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
                         <h4
-                          className={`text-xs text-foreground leading-snug break-words ${
+                          className={`text-xs text-foreground leading-snug truncate ${
                             isUnread ? "font-bold" : "font-semibold"
                           }`}
+                          title={n.title}
                         >
                           {n.title}
                         </h4>
                         {n.project_code && (
-                          <span className="shrink-0 text-[10px] font-mono font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
+                          <span className="shrink-0 text-[10px] font-mono font-bold text-brand-600 bg-brand-50 dark:bg-brand-950/40 px-1.5 py-0.5 rounded">
                             {n.project_code}
                           </span>
                         )}

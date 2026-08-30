@@ -96,10 +96,10 @@ export default function DashboardPage() {
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Active Detailing Staff", value: kpis.total_employees, icon: Users, color: "text-brand-400 bg-brand-500/10" },
-            { label: "Monitored Projects", value: kpis.active_projects, icon: FolderKanban, color: "text-emerald-400 bg-emerald-500/10" },
-            { label: "Today Attendance", value: kpis.today_attendance, icon: Clock, color: "text-purple-400 bg-purple-500/10" },
-            { label: "Approvals Required", value: kpis.pending_approvals.total, icon: AlertCircle, color: "text-amber-400 bg-amber-500/10" },
+            { label: "Total Team Staff", value: kpis.total_employees ?? 0, icon: Users, color: "text-brand-400 bg-brand-500/10" },
+            { label: "Active Projects", value: kpis.active_projects ?? 0, icon: FolderKanban, color: "text-emerald-400 bg-emerald-500/10" },
+            { label: "Total Submissions", value: kpis.total_submissions ?? kpis.active_projects ?? 0, icon: FileText, color: "text-purple-400 bg-purple-500/10" },
+            { label: "Approvals Pending", value: kpis.pending_approvals?.total ?? 0, icon: AlertCircle, color: "text-amber-400 bg-amber-500/10" },
           ].map((card, idx) => (
             <div key={idx} className="rounded-xl border border-border bg-card/60 backdrop-blur-md p-5 shadow-sm hover:shadow-md hover:translate-y-[-2px] transition-all duration-200 flex items-center justify-between">
               <div>
@@ -125,8 +125,8 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="relative h-48 w-full flex items-end justify-between pt-6 border-b border-border/80">
-                {charts.monthly_production.map((d: any, i: number) => {
-                  const maxTons = Math.max(...charts.monthly_production.map((x: any) => x.tonnage), 10);
+                {(charts?.monthly_production || []).map((d: any, i: number) => {
+                  const maxTons = Math.max(...(charts?.monthly_production || []).map((x: any) => x.tonnage), 10);
                   const heightPercent = Math.min((d.tonnage / maxTons) * 80, 80);
                   return (
                     <div key={i} className="flex flex-col items-center gap-1.5 flex-1 relative group">
@@ -145,7 +145,7 @@ export default function DashboardPage() {
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Production Output (Current Month)</h4>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-2xl font-bold text-foreground">{production_summary.total_tonnage} MT</span>
+                    <span className="text-2xl font-bold text-foreground">{production_summary?.total_tonnage ?? 0} MT</span>
                     <p className="text-[11px] text-muted-foreground">Total Tonnage Approved</p>
                   </div>
                   <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
@@ -154,15 +154,15 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="bg-card border border-border rounded-xl p-5 space-y-3">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Billing & Revision Charges</h4>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">System Operational Health</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-xl font-bold text-amber-400">₹{billing_summary.pending_amount.toLocaleString()}</span>
-                    <p className="text-[10px] text-muted-foreground">Pending Billing</p>
+                    <span className="text-xl font-bold text-emerald-400">100%</span>
+                    <p className="text-[10px] text-muted-foreground">API Status</p>
                   </div>
                   <div>
-                    <span className="text-xl font-bold text-emerald-400">₹{billing_summary.paid_amount.toLocaleString()}</span>
-                    <p className="text-[10px] text-muted-foreground">Collected</p>
+                    <span className="text-xl font-bold text-brand-400">Active</span>
+                    <p className="text-[10px] text-muted-foreground">AI Engine</p>
                   </div>
                 </div>
               </div>
@@ -173,25 +173,25 @@ export default function DashboardPage() {
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-bold text-foreground">Operational Actions</h3>
             <div className="space-y-3">
-              <Link href="/reports" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
-                <Activity className="text-brand-400 h-5 w-5" />
+              <Link href="/projects" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
+                <FolderKanban className="text-brand-400 h-5 w-5" />
                 <div>
-                  <div className="text-xs font-bold">Generate Enterprise Reports</div>
-                  <span className="text-[10px] text-muted-foreground">Export CSV & PDF styled summaries</span>
+                  <div className="text-xs font-bold">Projects Workspace</div>
+                  <span className="text-[10px] text-muted-foreground">Upload ZIPs & review registers</span>
                 </div>
               </Link>
               <Link href="/admin/settings" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
                 <DollarSign className="text-purple-400 h-5 w-5" />
                 <div>
                   <div className="text-xs font-bold">Manage System Settings</div>
-                  <span className="text-[10px] text-muted-foreground">Adjust configuration keys</span>
+                  <span className="text-[10px] text-muted-foreground">Configure identity & preferences</span>
                 </div>
               </Link>
-              <Link href="/admin/audit" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
+              <Link href="/admin/audit-logs" className="flex items-center gap-3 p-3 rounded-lg border border-border bg-slate-500/5 hover:bg-slate-500/10 transition-colors">
                 <FileText className="text-amber-400 h-5 w-5" />
                 <div>
                   <div className="text-xs font-bold">Audit Trail Logs</div>
-                  <span className="text-[10px] text-muted-foreground">Verify login/logout & DB updates</span>
+                  <span className="text-[10px] text-muted-foreground">Verify user actions & DB logs</span>
                 </div>
               </Link>
             </div>

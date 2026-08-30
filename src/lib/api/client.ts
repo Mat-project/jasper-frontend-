@@ -99,12 +99,14 @@ const processQueue = (error: unknown, token: string | null = null): void => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config as AxiosRequestConfig & {
+    const originalRequest = (error.config || {}) as AxiosRequestConfig & {
       _retry?: boolean;
     };
+    const requestUrl = originalRequest.url || "";
+    const isAuthEndpoint = requestUrl.includes("/auth/login") || requestUrl.includes("/token") || requestUrl.includes("/login");
 
-    // Only intercept 401 errors, and avoid infinite loops
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    // Only intercept 401 errors, avoid infinite loops, and skip auth endpoints
+    if (error.response?.status !== 401 || originalRequest._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
 

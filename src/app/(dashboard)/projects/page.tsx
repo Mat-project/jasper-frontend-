@@ -80,7 +80,19 @@ export default function EnterpriseProjectsPage() {
       setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", mail_number: "", mail_to: "", mail_cc: "", mail_bcc: "" });
     } catch (error: unknown) {
       const err = error as any;
-      showToast(err.response?.data?.detail || "Failed to create project", "error");
+      const data = err.response?.data;
+      let errorMsg = "Failed to create project";
+      if (typeof data === "object" && data !== null) {
+        if (data.detail) {
+          errorMsg = data.detail;
+        } else {
+          const messages = Object.entries(data).map(([field, msgs]) => 
+            `${field}: ${Array.isArray(msgs) ? msgs.join(" ") : msgs}`
+          );
+          if (messages.length > 0) errorMsg = messages.join(" | ");
+        }
+      }
+      showToast(errorMsg, "error");
     } finally {
       setIsSaving(false);
     }

@@ -232,15 +232,16 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* USER SETTINGS */}
+            {/* USER SETTINGS (Future Features - Commented for future activation) */}
             {activeTab === "user" && (
               <div className="space-y-4">
                 <h3 className="text-sm font-bold text-foreground pb-2 border-b border-border">User Controls</h3>
 
+                {/* Future Feature: Public Registrations
                 <div className="flex items-center justify-between p-3 rounded-lg bg-slate-500/5 border border-border">
                   <div>
                     <span className="text-xs font-semibold text-foreground block">Allow Public Registrations</span>
-                    <span className="text-[10px] text-muted-foreground">Toggle open signups from the login panel</span>
+                    <span className="text-[10px] text-muted-foreground font-medium">Toggle open signups from the login panel</span>
                   </div>
                   <input
                     type="checkbox"
@@ -249,11 +250,13 @@ export default function SettingsPage() {
                     className="rounded border-input text-brand-500 focus:ring-brand-500 h-4 w-4 cursor-pointer"
                   />
                 </div>
+                */}
 
+                {/* Future Feature: Email Verification
                 <div className="flex items-center justify-between p-3 rounded-lg bg-slate-500/5 border border-border">
                   <div>
                     <span className="text-xs font-semibold text-foreground block">Verify Email Activation</span>
-                    <span className="text-[10px] text-muted-foreground">Require new users to activate email addresses</span>
+                    <span className="text-[10px] text-muted-foreground font-medium">Require new users to activate email addresses</span>
                   </div>
                   <input
                     type="checkbox"
@@ -261,6 +264,11 @@ export default function SettingsPage() {
                     onChange={(e) => setUserValues({ ...userValues, requireEmailVerification: e.target.checked })}
                     className="rounded border-input text-brand-500 focus:ring-brand-500 h-4 w-4 cursor-pointer"
                   />
+                </div>
+                */}
+
+                <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-lg text-xs font-medium">
+                  User accounts are managed centrally by Administrators under <strong>Masters ➔ Employees</strong>. Self-registration features are reserved for future updates.
                 </div>
               </div>
             )}
@@ -292,6 +300,7 @@ export default function SettingsPage() {
                   />
                 </div>
 
+                {/* Future Feature: MFA Setup
                 <div className="flex items-center justify-between p-3 rounded-lg bg-slate-500/5 border border-border">
                   <div>
                     <span className="text-xs font-semibold text-foreground block">Force MFA Authentication</span>
@@ -304,6 +313,7 @@ export default function SettingsPage() {
                     className="rounded border-input text-brand-500 focus:ring-brand-500 h-4 w-4 cursor-pointer"
                   />
                 </div>
+                */}
               </div>
             )}
             {/* COMPANY PROFILE SETTINGS */}
