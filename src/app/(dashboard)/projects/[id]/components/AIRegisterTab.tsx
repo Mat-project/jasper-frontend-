@@ -16,13 +16,17 @@ export default function AIRegisterTab({ project }: { project: any }) {
   // submission across all Register AI tabs.
   const { workspace } = useProjectWorkspace();
 
+  const isUserUploadingRef = useRef(false);
+
   useEffect(() => {
     if (
+      isUserUploadingRef.current &&
       prevJobState.current &&
       prevJobState.current.job_state !== "Completed" &&
       jobState &&
       jobState.job_state === "Completed"
     ) {
+      isUserUploadingRef.current = false;
       window.dispatchEvent(new Event("zip-processing-completed"));
     }
     prevJobState.current = jobState;
@@ -92,6 +96,7 @@ export default function AIRegisterTab({ project }: { project: any }) {
   // Callback executed ONLY after successful ZIP upload returns a job_id
   const handleUploadSuccess = (newJobId?: string) => {
     if (newJobId) {
+      isUserUploadingRef.current = true;
       setJobId(newJobId);
     }
   };
