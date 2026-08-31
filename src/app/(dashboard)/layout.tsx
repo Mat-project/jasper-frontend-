@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth/context";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { NotificationToaster } from "@/components/NotificationToaster";
+import { DiagnosticErrorModal } from "@/components/DiagnosticErrorModal";
 
 export default function DashboardLayout({
   children,
@@ -54,6 +55,8 @@ export default function DashboardLayout({
           the toaster self-filters to only show toasts for the project the
           user is currently viewing. */}
       <NotificationToaster />
+      {/* Global diagnostic modal interceptor for API errors */}
+      <DiagnosticErrorModal />
     </div>
   );
 }

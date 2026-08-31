@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { UploadCloud, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { getAccessToken, getBaseUrl } from "@/lib/api/client";
 
+import { dispatchApiError } from "@/components/DiagnosticErrorModal";
+
 /** Safely converts any error value (string, object, Error) to a displayable string */
 function toErrorString(err: unknown): string {
   if (!err) return "An unknown error occurred.";
@@ -47,10 +49,11 @@ export default function UploadZIP({
     const formData = new FormData();
     formData.append("file", file);
 
+    const uploadUrl = `${getBaseUrl()}/api/v1/projects/${project.id}/upload/`;
+
     try {
-      const baseUrl = getBaseUrl();
       const res = await fetch(
-        `${baseUrl}/api/v1/projects/${project.id}/upload/`,
+        uploadUrl,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${getAccessToken()}` },
@@ -65,11 +68,29 @@ export default function UploadZIP({
         onUploadSuccess(data.job_id);
       } else {
         const data = await res.json().catch(() => ({}));
-        // Always convert to string — never store raw object in state
-        setErrorMsg(toErrorString(data.error ?? data.detail ?? data));
+        const errStr = toErrorString(data.error ?? data.detail ?? data);
+        setErrorMsg(errStr);
+        dispatchApiError({
+          title: res.statusText ? `HTTP ${res.status} ${res.statusText}` : `HTTP ${res.status} Upload Error`,
+          status: res.status,
+          statusText: res.statusText,
+          url: uploadUrl,
+          method: "POST",
+          message: errStr,
+          data: data,
+        });
       }
     } catch (err) {
-      setErrorMsg(toErrorString(err));
+      const errStr = toErrorString(err);
+      setErrorMsg(errStr);
+      dispatchApiError({
+        title: "ZIP Upload Network Error",
+        status: 0,
+        url: uploadUrl,
+        method: "POST",
+        message: errStr,
+        data: String(err),
+      });
     } finally {
       setUploading(false);
     }

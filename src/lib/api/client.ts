@@ -96,6 +96,19 @@ const processQueue = (error: unknown, token: string | null = null): void => {
   failedQueue = [];
 };
 
+import { dispatchApiError } from "@/components/DiagnosticErrorModal";
+
+function extractErrorMessage(error: any): string {
+  if (error.response?.data) {
+    const data = error.response.data;
+    if (typeof data === "string") return data;
+    if (data.error) return typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+    if (data.detail) return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    if (data.message) return typeof data.message === "string" ? data.message : JSON.stringify(data.message);
+  }
+  return error.message || "An unexpected API request error occurred.";
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -107,6 +120,18 @@ apiClient.interceptors.response.use(
 
     // Only intercept 401 errors, avoid infinite loops, and skip auth endpoints
     if (error.response?.status !== 401 || originalRequest._retry || isAuthEndpoint) {
+      // Dispatch global diagnostic modal for API errors
+      if (!isAuthEndpoint || error.response?.status !== 401) {
+        dispatchApiError({
+          title: error.response?.statusText || (error.response?.status ? `HTTP ${error.response.status} Error` : "API Connection Failed"),
+          status: error.response?.status || 0,
+          statusText: error.response?.statusText,
+          url: originalRequest.url || "API Endpoint",
+          method: (originalRequest.method || "GET").toUpperCase(),
+          message: extractErrorMessage(error),
+          data: error.response?.data,
+        });
+      }
       return Promise.reject(error);
     }
 
