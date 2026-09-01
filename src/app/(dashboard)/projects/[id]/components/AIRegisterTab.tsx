@@ -57,6 +57,24 @@ export default function AIRegisterTab({ project }: { project: any }) {
     }
   }, [project.id]);
 
+  // Check for any in-flight or latest job on initial page mount
+  useEffect(() => {
+    let isMounted = true;
+    fetchStatus().then((data) => {
+      if (!isMounted || !data) return;
+      if (data.job_state && data.job_state !== "IDLE") {
+        setJobState(data);
+        const stateUpper = (data.job_state || "").toUpperCase();
+        if (["INITIALIZING", "UNPACKING", "READING_PDFS", "EXTRACTING_METADATA", "BUILDING_RELATIONSHIPS", "QUEUED"].includes(stateUpper)) {
+          setJobId(data.id || "active");
+        }
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchStatus]);
+
   // Polling effect: ONLY active when jobId is set (starts ONLY after successful ZIP upload)
   useEffect(() => {
     if (!jobId) return;
