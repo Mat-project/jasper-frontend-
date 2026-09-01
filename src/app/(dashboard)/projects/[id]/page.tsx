@@ -344,8 +344,22 @@ function ProjectDetailsContent({
             activeSubmissionId={activeSubmissionId ?? ""}
           />
         ) : activeTab === "Review" ? (
-          <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-border">
-            <p className="text-muted-foreground">No active register generated yet. Please complete extraction and relationships.</p>
+          <div className="p-10 text-center bg-white rounded-2xl shadow-sm border border-slate-200 max-w-lg mx-auto my-8 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-100">
+              <FileSpreadsheet className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">No Register Generated Yet</h3>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                This project does not have a generated register yet. Upload a structural drawing ZIP package to extract details and generate the register.
+              </p>
+            </div>
+            <button
+              onClick={() => handleTabChange("Extraction")}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors inline-flex items-center gap-2"
+            >
+              Go to Upload & Extract
+            </button>
           </div>
         ) : null}
 
