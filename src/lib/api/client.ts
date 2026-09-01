@@ -102,9 +102,35 @@ function extractErrorMessage(error: any): string {
   if (error.response?.data) {
     const data = error.response.data;
     if (typeof data === "string") return data;
-    if (data.error) return typeof data.error === "string" ? data.error : JSON.stringify(data.error);
-    if (data.detail) return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
-    if (data.message) return typeof data.message === "string" ? data.message : JSON.stringify(data.message);
+    if (data.detail && typeof data.detail === "string") return data.detail;
+    if (data.error && typeof data.error === "string") return data.error;
+    if (data.message && typeof data.message === "string") return data.message;
+
+    if (typeof data === "object" && data !== null) {
+      const messages: string[] = [];
+      for (const [field, value] of Object.entries(data)) {
+        let valStr = "";
+        if (Array.isArray(value)) {
+          valStr = value.map(v => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(" ");
+        } else if (typeof value === "string") {
+          valStr = value;
+        } else if (typeof value === "object" && value !== null) {
+          valStr = JSON.stringify(value);
+        }
+
+        if (valStr) {
+          const fieldName = field.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+          if (valStr.toLowerCase().includes("already exists")) {
+            messages.push(`${fieldName} already exists. Please choose a different ${fieldName.toLowerCase()}.`);
+          } else if (valStr.toLowerCase().includes("required") || valStr.toLowerCase().includes("blank")) {
+            messages.push(`${fieldName} is required.`);
+          } else {
+            messages.push(`${fieldName}: ${valStr}`);
+          }
+        }
+      }
+      if (messages.length > 0) return messages.join(" ");
+    }
   }
   return error.message || "An unexpected API request error occurred.";
 }

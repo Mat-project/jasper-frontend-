@@ -23,6 +23,47 @@ import { useRouter } from "next/navigation";
 import { getProjects, createProject, deleteProject, EnterpriseProject } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
 
+/** Safely formats any backend API error response into a clean, human-readable user message. */
+function formatUserFriendlyError(error: unknown): string {
+  if (!error) return "An unexpected error occurred. Please try again.";
+  const err = error as any;
+  const data = err?.response?.data || err?.data || err;
+
+  if (typeof data === "string") return data;
+
+  if (typeof data === "object" && data !== null) {
+    if (typeof data.detail === "string") return data.detail;
+    if (typeof data.error === "string") return data.error;
+    if (typeof data.message === "string") return data.message;
+
+    const messages: string[] = [];
+    for (const [field, value] of Object.entries(data)) {
+      let valStr = "";
+      if (Array.isArray(value)) {
+        valStr = value.map(v => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(" ");
+      } else if (typeof value === "string") {
+        valStr = value;
+      } else if (typeof value === "object" && value !== null) {
+        valStr = JSON.stringify(value);
+      }
+
+      if (valStr) {
+        const fieldName = field.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+        if (valStr.toLowerCase().includes("already exists")) {
+          messages.push(`Project code already exists. Please choose a different code.`);
+        } else if (valStr.toLowerCase().includes("required") || valStr.toLowerCase().includes("blank")) {
+          messages.push(`${fieldName} is required.`);
+        } else {
+          messages.push(`${fieldName}: ${valStr}`);
+        }
+      }
+    }
+    if (messages.length > 0) return messages.join(" ");
+  }
+
+  return err?.message || "Failed to complete project creation. Please check the details.";
+}
+
 export default function EnterpriseProjectsPage() {
   const [projects, setProjects] = useState<EnterpriseProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,8 +101,9 @@ export default function EnterpriseProjectsPage() {
   const completedCount = projects.filter((p) => p.status === "Completed").length;
 
   const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    const displayMsg = typeof message === "string" ? message : formatUserFriendlyError(message);
+    setToast({ message: displayMsg, type });
+    setTimeout(() => setToast(null), 5000);
   };
 
   const filteredProjects = projects.filter(p => 
@@ -84,21 +126,9 @@ export default function EnterpriseProjectsPage() {
       showToast("Project created successfully", "success");
       setAddForm({ code: "", name: "", client: "", start_date: "2026-07-01", mail_number: "", mail_to: "", mail_cc: "", mail_bcc: "" });
     } catch (error: unknown) {
-      const err = error as any;
-      const data = err.response?.data;
-      let errorMsg = "Failed to create project.";
-      if (typeof data === "object" && data !== null) {
-        if (data.detail) {
-          errorMsg = data.detail;
-        } else {
-          const messages = Object.entries(data).map(([field, msgs]) => 
-            `${field.toUpperCase()}: ${Array.isArray(msgs) ? msgs.join(" ") : msgs}`
-          );
-          if (messages.length > 0) errorMsg = messages.join(" | ");
-        }
-      }
-      setModalError(errorMsg);
-      showToast(errorMsg, "error");
+      const userMsg = formatUserFriendlyError(error);
+      setModalError(userMsg);
+      showToast(userMsg, "error");
     } finally {
       setIsSaving(false);
     }
@@ -111,8 +141,8 @@ export default function EnterpriseProjectsPage() {
       setDeleteConfirmId(null);
       setOpenActionMenu(null);
       showToast("Project deleted", "success");
-    } catch {
-      showToast("Failed to delete project", "error");
+    } catch (err) {
+      showToast(formatUserFriendlyError(err), "error");
     }
   };
 
@@ -139,11 +169,11 @@ export default function EnterpriseProjectsPage() {
     <div className="min-h-screen bg-[#F8FAFC] p-6 space-y-6 relative">
       {/* Toast */}
       {toast && (
-        <div className={cn("fixed top-6 right-6 px-4 py-3 rounded-xl shadow-lg border z-50 flex items-center gap-3 animate-in fade-in slide-in-from-top-2",
-          toast.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"
+        <div className={cn("fixed top-6 right-6 px-5 py-3.5 rounded-xl shadow-2xl border z-[9999] flex items-center gap-3 animate-in fade-in slide-in-from-top-2 max-w-md",
+          toast.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-red-50 border-red-200 text-red-900"
         )}>
-          {toast.type === "success" ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <TrendingDown className="h-5 w-5 text-red-600" />}
-          <span className="font-semibold text-sm">{toast.message}</span>
+          {toast.type === "success" ? <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /> : <TrendingDown className="h-5 w-5 text-red-600 shrink-0" />}
+          <span className="font-semibold text-xs leading-relaxed">{toast.message}</span>
         </div>
       )}
 
