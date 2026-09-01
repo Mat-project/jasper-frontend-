@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { UploadCloud, CheckCircle2, AlertCircle, X } from "lucide-react";
-import { getAccessToken, getBaseUrl } from "@/lib/api/client";
-
+import { UploadCloud, CheckCircle2, AlertCircle, X, CloudUpload } from "lucide-react";
+import apiClient, { getBaseUrl } from "@/lib/api/client";
 import { dispatchApiError } from "@/components/DiagnosticErrorModal";
 
 /** Safely converts any error value (string, object, Error) to a displayable string */
@@ -15,7 +14,6 @@ function toErrorString(err: unknown): string {
     if (typeof e.message === "string") return e.message;
     if (typeof e.detail === "string") return e.detail;
     if (typeof e.error === "string") return e.error;
-    // Last resort: JSON-stringify so it never renders as an object
     try { return JSON.stringify(err); } catch { return "An unknown error occurred."; }
   }
   return String(err);
@@ -32,12 +30,16 @@ export default function UploadZIP({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStatusText, setUploadStatusText] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
       setErrorMsg(null);
+      setUploadProgress(0);
+      setUploadStatusText("");
     }
   };
 
@@ -45,51 +47,120 @@ export default function UploadZIP({
     if (!file) return;
     setUploading(true);
     setErrorMsg(null);
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const uploadUrl = `${getBaseUrl()}/api/v1/projects/${project.id}/upload/`;
+    setUploadProgress(0);
+    setUploadStatusText("Initializing upload...");
 
     try {
-      const res = await fetch(
-        uploadUrl,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${getAccessToken()}` },
-          body: formData,
-        }
-      );
+      // Step 1: Check if Direct S3 Pre-signed upload is available
+      let useDirectS3 = false;
+      let s3UploadUrl = "";
+      let s3Key = "";
 
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setFile(null);
-        window.dispatchEvent(new Event("zip-upload-started"));
-        onUploadSuccess(data.job_id);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        const errStr = toErrorString(data.error ?? data.detail ?? data);
-        setErrorMsg(errStr);
-        dispatchApiError({
-          title: res.statusText ? `HTTP ${res.status} ${res.statusText}` : `HTTP ${res.status} Upload Error`,
-          status: res.status,
-          statusText: res.statusText,
-          url: uploadUrl,
-          method: "POST",
-          message: errStr,
-          data: data,
-        });
+      try {
+        const presignRes = await apiClient.post(
+          `/api/v1/projects/${project.id}/get-upload-url/`,
+          {
+            filename: file.name,
+            file_size: file.size,
+            content_type: file.type || "application/zip",
+          }
+        );
+
+        if (presignRes.data?.direct_s3 && presignRes.data?.upload_url) {
+          useDirectS3 = true;
+          s3UploadUrl = presignRes.data.upload_url;
+          s3Key = presignRes.data.s3_key;
+        }
+      } catch (presignErr) {
+        console.warn("Direct S3 presign failed, falling back to direct server upload:", presignErr);
       }
-    } catch (err) {
-      const errStr = toErrorString(err);
+
+      // Step 2A: Direct S3 Pre-signed Upload (Supports 0MB to 500MB+)
+      if (useDirectS3 && s3UploadUrl && s3Key) {
+        setUploadStatusText(`Uploading directly to Cloud Storage (S3)...`);
+
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", s3UploadUrl, true);
+          xhr.setRequestHeader("Content-Type", file.type || "application/zip");
+
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percent = Math.round((event.loaded / event.total) * 100);
+              setUploadProgress(percent);
+              const loadedMB = (event.loaded / (1024 * 1024)).toFixed(1);
+              const totalMB = (event.total / (1024 * 1024)).toFixed(1);
+              setUploadStatusText(`Uploading to Cloud Storage: ${percent}% (${loadedMB} MB / ${totalMB} MB)`);
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`S3 Cloud Upload failed with HTTP ${xhr.status}: ${xhr.statusText}`));
+            }
+          };
+
+          xhr.onerror = () => {
+            reject(new Error("Network error during direct S3 cloud upload. Check your internet connection or S3 bucket CORS."));
+          };
+
+          xhr.send(file);
+        });
+
+        // Step 2B: Confirm upload and trigger Celery processing
+        setUploadStatusText("Confirming upload and starting AI extraction...");
+        const completeRes = await apiClient.post(
+          `/api/v1/projects/${project.id}/complete-upload/`,
+          {
+            s3_key: s3Key,
+            filename: file.name,
+            file_size: file.size,
+          }
+        );
+
+        setFile(null);
+        setUploadProgress(100);
+        window.dispatchEvent(new Event("zip-upload-started"));
+        onUploadSuccess(completeRes.data?.job_id);
+      } else {
+        // Fallback: Standard Server Upload via Authenticated apiClient
+        setUploadStatusText("Uploading to server...");
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await apiClient.post(
+          `/api/v1/projects/${project.id}/upload/`,
+          formData,
+          {
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                setUploadProgress(percent);
+                const loadedMB = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
+                const totalMB = (progressEvent.total / (1024 * 1024)).toFixed(1);
+                setUploadStatusText(`Uploading: ${percent}% (${loadedMB} MB / ${totalMB} MB)`);
+              }
+            },
+          }
+        );
+
+        setFile(null);
+        setUploadProgress(100);
+        window.dispatchEvent(new Event("zip-upload-started"));
+        onUploadSuccess(res.data?.job_id);
+      }
+    } catch (err: any) {
+      const errStr = toErrorString(err?.response?.data?.error ?? err?.response?.data?.detail ?? err?.message ?? err);
       setErrorMsg(errStr);
       dispatchApiError({
-        title: "ZIP Upload Network Error",
-        status: 0,
-        url: uploadUrl,
+        title: "ZIP Upload Failed",
+        status: err?.response?.status ?? 0,
+        url: `${getBaseUrl()}/api/v1/projects/${project.id}/upload/`,
         method: "POST",
         message: errStr,
-        data: String(err),
+        data: err?.response?.data ?? String(err),
       });
     } finally {
       setUploading(false);
@@ -129,14 +200,13 @@ export default function UploadZIP({
       )}
 
       {/* Drop zone */}
-      <div className="border-2 border-dashed border-slate-300 rounded-xl p-12 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors">
-        <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
+      <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors">
+        <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 shadow-sm">
           <UploadCloud className="h-8 w-8" />
         </div>
         <h3 className="text-lg font-bold text-slate-800">Upload ZIP Package</h3>
-        <p className="text-sm text-slate-500 mb-6 text-center max-w-sm mt-2">
-          Upload a ZIP file containing the engineering drawings and BBS for this
-          project. Maximum size 500 MB.
+        <p className="text-sm text-slate-500 mb-6 text-center max-w-md mt-1">
+          Upload a ZIP package containing CAD engineering drawings and BBS schedules. Supports up to <strong className="text-slate-700 font-semibold">500 MB</strong> via direct cloud storage.
         </p>
 
         <input
@@ -145,33 +215,55 @@ export default function UploadZIP({
           onChange={handleFileChange}
           className="hidden"
           id="zip-upload"
+          disabled={uploading}
         />
 
         {!file ? (
           <label
             htmlFor="zip-upload"
-            className="cursor-pointer bg-white border border-slate-200 px-6 py-2.5 rounded-lg text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+            className="cursor-pointer bg-white border border-slate-200 px-6 py-2.5 rounded-lg text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors inline-flex items-center gap-2"
           >
-            Select ZIP File
+            <CloudUpload className="w-4 h-4 text-blue-600" />
+            Select ZIP File (0MB – 500MB)
           </label>
         ) : (
-          <div className="flex flex-col items-center gap-4 w-full">
+          <div className="flex flex-col items-center gap-4 w-full max-w-lg">
             {/* Selected file row */}
-            <div className="flex items-center justify-between bg-white border border-slate-200 p-3 rounded-lg w-full max-w-md">
-              <span className="text-sm font-medium text-slate-700 truncate">
-                {file.name}
-              </span>
-              <span className="text-xs text-slate-400 shrink-0 ml-2">
+            <div className="flex items-center justify-between bg-white border border-slate-200 p-3.5 rounded-lg w-full shadow-sm">
+              <div className="flex items-center gap-2 truncate">
+                <UploadCloud className="w-5 h-5 text-blue-500 shrink-0" />
+                <span className="text-sm font-semibold text-slate-700 truncate">
+                  {file.name}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200 shrink-0 ml-2">
                 {(file.size / 1024 / 1024).toFixed(2)} MB
               </span>
             </div>
+
+            {/* Live Upload Progress Bar */}
+            {uploading && (
+              <div className="w-full space-y-2 bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span className="truncate">{uploadStatusText || "Uploading..."}</span>
+                  <span className="text-blue-600 font-bold ml-2">{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => { setFile(null); setErrorMsg(null); }}
-                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 flex items-center gap-1"
+                onClick={() => { setFile(null); setErrorMsg(null); setUploadProgress(0); }}
+                disabled={uploading}
+                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               >
                 <X className="h-4 w-4" /> Cancel
               </button>
@@ -184,15 +276,15 @@ export default function UploadZIP({
                 {uploading && (
                   <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
                 )}
-                {uploading ? "Uploading..." : "Start Processing"}
+                {uploading ? "Processing..." : "Start Processing"}
               </button>
             </div>
           </div>
         )}
 
-        {/* Upload error — always a string, never an object */}
+        {/* Upload error */}
         {errorMsg && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium mt-4 w-full max-w-md text-center">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium mt-4 w-full max-w-lg text-center">
             {errorMsg}
           </div>
         )}
