@@ -146,11 +146,15 @@ apiClient.interceptors.response.use(
 
     // Only intercept 401 errors, avoid infinite loops, and skip auth endpoints
     if (error.response?.status !== 401 || originalRequest._retry || isAuthEndpoint) {
-      // Dispatch global diagnostic modal for API errors
-      if (!isAuthEndpoint || error.response?.status !== 401) {
+      const status = error.response?.status || 0;
+      // Only show diagnostic modal for 5xx server errors and network errors (status 0).
+      // 4xx errors (400 validation, 404 not found, 409 conflict, etc.) are handled
+      // inline by individual components with user-friendly messages.
+      const shouldShowDiagnostic = !isAuthEndpoint && (status === 0 || status >= 500);
+      if (shouldShowDiagnostic) {
         dispatchApiError({
-          title: error.response?.statusText || (error.response?.status ? `HTTP ${error.response.status} Error` : "API Connection Failed"),
-          status: error.response?.status || 0,
+          title: error.response?.statusText || (status ? `HTTP ${status} Error` : "API Connection Failed"),
+          status,
           statusText: error.response?.statusText,
           url: originalRequest.url || "API Endpoint",
           method: (originalRequest.method || "GET").toUpperCase(),
