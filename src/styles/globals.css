@@ -104,3 +104,13 @@
     @apply bg-white/10 backdrop-blur-md border border-white/20;
   }
 }
+
+/* ── Prevent Browser Autofill White Box from covering text & password toggle icons ── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px rgba(15, 23, 42, 0.95) inset !important;
+  transition: background-color 50000s ease-in-out 0s !important;
+}

@@ -15,6 +15,9 @@ import {
   TrendingDown,
   Download,
   FileSpreadsheet,
+  AlertTriangle,
+  X,
+  Mail,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getProjects, createProject, deleteProject, EnterpriseProject } from "@/lib/api/projects";
@@ -29,6 +32,7 @@ export default function EnterpriseProjectsPage() {
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const [addForm, setAddForm] = useState({
@@ -69,6 +73,7 @@ export default function EnterpriseProjectsPage() {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    setModalError(null);
     try {
       const newProj = await createProject({
         ...addForm,
@@ -81,17 +86,18 @@ export default function EnterpriseProjectsPage() {
     } catch (error: unknown) {
       const err = error as any;
       const data = err.response?.data;
-      let errorMsg = "Failed to create project";
+      let errorMsg = "Failed to create project.";
       if (typeof data === "object" && data !== null) {
         if (data.detail) {
           errorMsg = data.detail;
         } else {
           const messages = Object.entries(data).map(([field, msgs]) => 
-            `${field}: ${Array.isArray(msgs) ? msgs.join(" ") : msgs}`
+            `${field.toUpperCase()}: ${Array.isArray(msgs) ? msgs.join(" ") : msgs}`
           );
           if (messages.length > 0) errorMsg = messages.join(" | ");
         }
       }
+      setModalError(errorMsg);
       showToast(errorMsg, "error");
     } finally {
       setIsSaving(false);
@@ -296,56 +302,191 @@ export default function EnterpriseProjectsPage() {
 
       {/* ADD PROJECT MODAL */}
       {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-gray-900">Create New Project</h3>
-              <button onClick={() => setIsAddOpen(false)} className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors">
-                <Trash2 className="h-4 w-4 opacity-0 hidden" />
-                <span className="text-gray-500 font-bold text-lg leading-none">&times;</span>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                  <FolderKanban className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Create New Project</h3>
+                  <p className="text-xs text-slate-500">Define project credentials & default email routing.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAddOpen(false);
+                  setModalError(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
+
+            {/* Modal Form */}
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
+              {/* Permanent In-Modal Error Alert Banner */}
+              {modalError && (
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-3 animate-fade-in shadow-sm">
+                  <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-rose-900 text-xs">Project Creation Error</p>
+                    <p className="mt-0.5 text-rose-700 text-xs font-mono break-words leading-relaxed">
+                      {modalError}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalError(null)}
+                    className="text-rose-400 hover:text-rose-700 transition-colors p-1"
+                    title="Dismiss error"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Section 1: Project Identity */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 pb-1 border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <Building2 className="h-3.5 w-3.5 text-blue-500" />
+                  <span>1. Project Identity & Client</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">Project Code <span className="text-rose-500">*</span></label>
+                    <input
+                      required
+                      type="text"
+                      value={addForm.code}
+                      onChange={(e) => {
+                        if (modalError) setModalError(null);
+                        setAddForm({ ...addForm, code: e.target.value });
+                      }}
+                      className={cn(
+                        "w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 transition-all",
+                        modalError && modalError.toLowerCase().includes("code")
+                          ? "border-rose-400 bg-rose-50/30 focus:ring-rose-400 text-rose-900"
+                          : "border-gray-300 focus:ring-blue-500/20 focus:border-blue-600"
+                      )}
+                      placeholder="e.g. PRJ-101"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">Client Name <span className="text-rose-500">*</span></label>
+                    <input
+                      required
+                      type="text"
+                      value={addForm.client}
+                      onChange={(e) => {
+                        if (modalError) setModalError(null);
+                        setAddForm({ ...addForm, client: e.target.value });
+                      }}
+                      className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                      placeholder="e.g. Acme Corp"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Project Code</label>
-                  <input required type="text" value={addForm.code} onChange={(e) => setAddForm({ ...addForm, code: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. PRJ-101" />
+                  <label className="text-xs font-semibold text-gray-700">Project Title / Name <span className="text-rose-500">*</span></label>
+                  <input
+                    required
+                    type="text"
+                    value={addForm.name}
+                    onChange={(e) => {
+                      if (modalError) setModalError(null);
+                      setAddForm({ ...addForm, name: e.target.value });
+                    }}
+                    className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                    placeholder="e.g. Downtown Metro Extension"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-700">Project Start Date <span className="text-rose-500">*</span></label>
+                  <input
+                    required
+                    type="date"
+                    value={addForm.start_date}
+                    onChange={(e) => setAddForm({ ...addForm, start_date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Section 2: Transmittal Mail Configuration */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2 pb-1 border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <Mail className="h-3.5 w-3.5 text-blue-500" />
+                  <span>2. Transmittal Mail Routing</span>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Client Name</label>
-                  <input required type="text" value={addForm.client} onChange={(e) => setAddForm({ ...addForm, client: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Acme Corp" />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Project Name</label>
-                <input required type="text" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Downtown Metro Extension" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Start Date</label>
-                <input required type="date" value={addForm.start_date} onChange={(e) => setAddForm({ ...addForm, start_date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Mail Number</label>
-                <input type="text" value={addForm.mail_number} onChange={(e) => setAddForm({ ...addForm, mail_number: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. JANU-SUB-001" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Default To (comma separated)</label>
-                <input type="text" value={addForm.mail_to} onChange={(e) => setAddForm({ ...addForm, mail_to: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. client@company.com, lead@company.com" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Default CC</label>
-                  <input type="text" value={addForm.mail_cc} onChange={(e) => setAddForm({ ...addForm, mail_cc: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. pm@jasper.ae" />
+                  <label className="text-xs font-semibold text-gray-700">Initial Transmittal Mail Number</label>
+                  <input
+                    type="text"
+                    value={addForm.mail_number}
+                    onChange={(e) => setAddForm({ ...addForm, mail_number: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                    placeholder="e.g. JANU-SUB-001"
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Default BCC</label>
-                  <input type="text" value={addForm.mail_bcc} onChange={(e) => setAddForm({ ...addForm, mail_bcc: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. archive@jasper.ae" />
+                  <label className="text-xs font-semibold text-gray-700">Default To Recipients (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={addForm.mail_to}
+                    onChange={(e) => setAddForm({ ...addForm, mail_to: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                    placeholder="e.g. client@company.com, lead@company.com"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">Default CC</label>
+                    <input
+                      type="text"
+                      value={addForm.mail_cc}
+                      onChange={(e) => setAddForm({ ...addForm, mail_cc: e.target.value })}
+                      className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                      placeholder="e.g. pm@jasper.ae"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700">Default BCC</label>
+                    <input
+                      type="text"
+                      value={addForm.mail_bcc}
+                      onChange={(e) => setAddForm({ ...addForm, mail_bcc: e.target.value })}
+                      className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                      placeholder="e.g. archive@jasper.ae"
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsAddOpen(false)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm disabled:opacity-50">
-                  {isSaving ? "Saving..." : "Create Project"}
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddOpen(false);
+                    setModalError(null);
+                  }}
+                  className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-md disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {isSaving ? "Creating Project..." : "Create Project"}
                 </button>
               </div>
             </form>

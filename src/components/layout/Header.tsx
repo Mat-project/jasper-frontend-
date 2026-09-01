@@ -17,7 +17,7 @@ export function Header() {
   const { user, logout } = useAuth();
 
   return (
-    <header className="flex items-center justify-between h-16 px-6 border-b border-border bg-background shrink-0">
+    <header className="relative z-30 flex items-center justify-between h-16 px-6 border-b border-border bg-background shrink-0">
       {/* Left — Global Search */}
       <div className="flex-1 flex items-center">
         <GlobalSearch />
