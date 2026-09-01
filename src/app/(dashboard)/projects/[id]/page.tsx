@@ -158,6 +158,14 @@ function ProjectDetailsContent({
     }
   }, [id, router]);
 
+  // Fetch register data on initial mount so that reloading the page on the
+  // Review tab does NOT show "No Register Generated Yet". Previously this was
+  // called inside a useEffect that also handled the project prop, but that
+  // effect was removed when tab-persistence was added, leaving no trigger.
+  useEffect(() => {
+    fetchRegisterData();
+  }, [fetchRegisterData]);
+
   // Listen for completion events from AIRegisterTab.
   // On a successful ZIP completion:
   //   - refresh the shared workspace
@@ -342,6 +350,7 @@ function ProjectDetailsContent({
             }}
             onSaveSuccess={fetchRegisterData}
             activeSubmissionId={activeSubmissionId ?? ""}
+            onGoToExtraction={() => handleTabChange("Extraction")}
           />
         ) : activeTab === "Review" ? (
           <div className="p-10 text-center bg-white rounded-2xl shadow-sm border border-slate-200 max-w-lg mx-auto my-8 space-y-4">
