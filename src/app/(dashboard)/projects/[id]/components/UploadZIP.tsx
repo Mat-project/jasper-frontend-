@@ -51,14 +51,15 @@ export default function UploadZIP({
     setUploadStatusText("Initializing upload...");
 
     try {
-      // Step 1: Request Direct S3 Pre-signed upload URL
+      // Step 1: Request Direct S3 Pre-signed upload URL (with 2 min timeout for slow networks)
       const presignRes = await apiClient.post(
         `/api/v1/projects/${project.id}/get-upload-url/`,
         {
           filename: file.name,
           file_size: file.size,
           content_type: file.type || "application/zip",
-        }
+        },
+        { timeout: 120_000 }
       );
 
       const { direct_s3, upload_url, s3_key } = presignRes.data || {};
@@ -97,7 +98,7 @@ export default function UploadZIP({
           xhr.send(file);
         });
 
-        // Step 2B: Confirm upload and trigger Celery processing
+        // Step 2B: Confirm upload and trigger Celery processing (with 2 min timeout)
         setUploadStatusText("Confirming upload and starting AI extraction...");
         const completeRes = await apiClient.post(
           `/api/v1/projects/${project.id}/complete-upload/`,
@@ -105,7 +106,8 @@ export default function UploadZIP({
             s3_key: s3_key,
             filename: file.name,
             file_size: file.size,
-          }
+          },
+          { timeout: 120_000 }
         );
 
         setFile(null);
