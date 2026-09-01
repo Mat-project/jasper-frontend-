@@ -51,37 +51,25 @@ export default function UploadZIP({
     setUploadStatusText("Initializing upload...");
 
     try {
-      // Step 1: Check if Direct S3 Pre-signed upload is available
-      let useDirectS3 = false;
-      let s3UploadUrl = "";
-      let s3Key = "";
-
-      try {
-        const presignRes = await apiClient.post(
-          `/api/v1/projects/${project.id}/get-upload-url/`,
-          {
-            filename: file.name,
-            file_size: file.size,
-            content_type: file.type || "application/zip",
-          }
-        );
-
-        if (presignRes.data?.direct_s3 && presignRes.data?.upload_url) {
-          useDirectS3 = true;
-          s3UploadUrl = presignRes.data.upload_url;
-          s3Key = presignRes.data.s3_key;
+      // Step 1: Request Direct S3 Pre-signed upload URL
+      const presignRes = await apiClient.post(
+        `/api/v1/projects/${project.id}/get-upload-url/`,
+        {
+          filename: file.name,
+          file_size: file.size,
+          content_type: file.type || "application/zip",
         }
-      } catch (presignErr) {
-        console.warn("Direct S3 presign failed, falling back to direct server upload:", presignErr);
-      }
+      );
 
-      // Step 2A: Direct S3 Pre-signed Upload (Supports 0MB to 500MB+)
-      if (useDirectS3 && s3UploadUrl && s3Key) {
+      const { direct_s3, upload_url, s3_key } = presignRes.data || {};
+
+      if (direct_s3 && upload_url && s3_key) {
+        // Step 2A: Direct S3 Pre-signed Upload (Supports 0MB to 500MB+)
         setUploadStatusText(`Uploading directly to Cloud Storage (S3)...`);
 
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open("PUT", s3UploadUrl, true);
+          xhr.open("PUT", upload_url, true);
           xhr.setRequestHeader("Content-Type", file.type || "application/zip");
 
           xhr.upload.onprogress = (event) => {
@@ -114,7 +102,7 @@ export default function UploadZIP({
         const completeRes = await apiClient.post(
           `/api/v1/projects/${project.id}/complete-upload/`,
           {
-            s3_key: s3Key,
+            s3_key: s3_key,
             filename: file.name,
             file_size: file.size,
           }
@@ -153,12 +141,16 @@ export default function UploadZIP({
       }
     } catch (err: any) {
       const errStr = toErrorString(err?.response?.data?.error ?? err?.response?.data?.detail ?? err?.message ?? err);
+      const failedUrl = err?.config?.url 
+        ? (err.config.url.startsWith("http") ? err.config.url : `${getBaseUrl()}${err.config.url}`)
+        : `${getBaseUrl()}/api/v1/projects/${project.id}/get-upload-url/`;
+
       setErrorMsg(errStr);
       dispatchApiError({
         title: "ZIP Upload Failed",
         status: err?.response?.status ?? 0,
-        url: `${getBaseUrl()}/api/v1/projects/${project.id}/upload/`,
-        method: "POST",
+        url: failedUrl,
+        method: err?.config?.method ? err.config.method.toUpperCase() : "POST",
         message: errStr,
         data: err?.response?.data ?? String(err),
       });
