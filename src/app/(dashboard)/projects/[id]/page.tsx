@@ -373,7 +373,13 @@ function ProjectDetailsContent({
         ) : null}
 
         {activeTab === "Revisions" && <RevisionManagementTab projectId={project.id} />}
-        {activeTab === "Transmittals" && <TransmittalTab project={project} projectId={project.id} />}
+        {activeTab === "Transmittals" && (
+          <TransmittalTab
+            project={project}
+            projectId={project.id}
+            onGoToReview={() => handleTabChange("Review")}
+          />
+        )}
       </div>
 
       {/* Edit Project Modal */}

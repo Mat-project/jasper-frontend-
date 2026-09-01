@@ -8,6 +8,8 @@ import {
   FileText,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
+  ShieldCheck,
   Loader2,
   Paperclip,
   Building2,
@@ -29,6 +31,7 @@ import {
 import apiClient from "@/lib/api/client";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
+import { cn } from "@/lib/utils";
 
 interface AttachmentFile {
   name: string;
@@ -64,7 +67,15 @@ interface ZipPackage {
   created_at: string;
 }
 
-export default function TransmittalTab({ project, projectId }: { project: any; projectId: string }) {
+export default function TransmittalTab({
+  project,
+  projectId,
+  onGoToReview,
+}: {
+  project: any;
+  projectId: string;
+  onGoToReview?: () => void;
+}) {
   // Shared workspace context — keeps this tab's selected submission in sync
   // with the rest of the Register AI tabs.
   const { activeSubmissionId } = useProjectWorkspace();
@@ -96,6 +107,7 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
   const [drawings, setDrawings] = useState<string[]>([]);
   const [registerRows, setRegisterRows] = useState<any[]>([]);
   const [activeRegVersion, setActiveRegVersion] = useState("1.0");
+  const [isRegisterApproved, setIsRegisterApproved] = useState(false);
   const [loadingDrawings, setLoadingDrawings] = useState(false);
 
   // Attachments State
@@ -283,6 +295,7 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
         // Find active register, or fallback to the latest draft
         const activeReg = registersArray.find((r: any) => r.status === "Active") || registersArray[0];
         setActiveRegVersion(activeReg.version_number.toString());
+        setIsRegisterApproved(activeReg.is_approved === true);
         
         // Get rows for this register
         const rowsRes = await apiClient.get(`/api/v1/projects/${projectId}/registers/${activeReg.id}/rows/`);
@@ -317,13 +330,35 @@ export default function TransmittalTab({ project, projectId }: { project: any; p
     }
   }, [projectId, selectedSubmission]);
 
+  // Fetch Register Approval status on mount
+  const fetchRegisterStatus = React.useCallback(async () => {
+    try {
+      const regRes = await apiClient.get(`/api/v1/projects/${projectId}/registers/`);
+      let registers = regRes.data;
+      if (registers && typeof registers === 'object' && 'results' in registers) {
+        registers = registers.results;
+      }
+      const registersArray = Array.isArray(registers) ? registers : [];
+      if (registersArray.length > 0) {
+        const activeReg = registersArray.find((r: any) => r.status === "Active") || registersArray[0];
+        setActiveRegVersion(activeReg.version_number.toString());
+        setIsRegisterApproved(activeReg.is_approved === true);
+      } else {
+        setIsRegisterApproved(false);
+      }
+    } catch (err) {
+      console.error("Failed to fetch register status in TransmittalTab", err);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     if (project) {
       fetchHistory();
       fetchContacts();
       fetchSubmissions();
+      fetchRegisterStatus();
     }
-  }, [project, fetchHistory, fetchContacts, fetchSubmissions]);
+  }, [project, fetchHistory, fetchContacts, fetchSubmissions, fetchRegisterStatus]);
 
   useEffect(() => {
     if (projectId && selectedSubmission) {
@@ -572,6 +607,10 @@ Jasper Detailing Services`;
   // Form submission
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isRegisterApproved) {
+      showToast("Document Register must be formally approved in Register Review before sending client transmittals.", "error");
+      return;
+    }
     if (!toField.trim() || !subjectField.trim() || !bodyField.trim()) {
       showToast("Please fill in To, Subject, and Email Body fields.", "error");
       return;
@@ -663,6 +702,47 @@ Jasper Detailing Services`;
             </div>
 
             <form onSubmit={handleSend} className="p-6 space-y-5">
+              {/* Approval Status Alert Banner */}
+              {!isRegisterApproved ? (
+                <div className="bg-amber-50 border border-amber-200/90 text-amber-900 p-4 rounded-xl flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 text-amber-700 rounded-lg shrink-0">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-amber-900">
+                        Register Approval Required Before Client Dispatch
+                      </h4>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Document Register v{activeRegVersion} is currently in <span className="font-semibold">Draft</span> status. Formally sign off in Register Review before sending transmittal emails to clients.
+                      </p>
+                    </div>
+                  </div>
+                  {onGoToReview && (
+                    <button
+                      type="button"
+                      onClick={onGoToReview}
+                      className="text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300 px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ml-4"
+                    >
+                      <ShieldCheck className="h-4 w-4 text-amber-800" />
+                      Go to Register Review
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-xl flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
+                    <p className="text-xs text-emerald-800 font-medium">
+                      <span className="font-bold text-emerald-900">Document Register v{activeRegVersion} Formally Approved</span> — Certified and ready for client dispatch.
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-0.5 text-[10px] font-bold bg-emerald-200/80 text-emerald-800 rounded-full border border-emerald-300">
+                    Certified
+                  </span>
+                </div>
+              )}
+
               {/* Submission Selector */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
@@ -959,11 +1039,25 @@ Jasper Detailing Services`;
               </div>
 
               {/* Send Button container */}
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                {!isRegisterApproved ? (
+                  <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    Approve register in Register Review to unlock client email dispatch
+                  </p>
+                ) : (
+                  <div />
+                )}
                 <button
                   type="submit"
-                  disabled={sending}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm shadow-sm transition flex items-center gap-2 disabled:bg-blue-400"
+                  disabled={sending || !isRegisterApproved}
+                  title={!isRegisterApproved ? "Approve register in Register Review tab to enable client dispatch" : undefined}
+                  className={cn(
+                    "px-5 py-2 font-medium rounded-lg text-sm shadow-sm transition flex items-center gap-2",
+                    !isRegisterApproved
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300"
+                      : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                  )}
                 >
                   {sending ? (
                     <>
