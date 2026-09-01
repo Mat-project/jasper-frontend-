@@ -65,6 +65,16 @@ interface RelationshipRecord {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function checkIsStandalone(rel: RelationshipRecord): boolean {
+  const bbsNum = getBBSNumber(rel);
+  return (
+    !bbsNum ||
+    bbsNum === "—" ||
+    bbsNum === "No BBS File Present" ||
+    bbsNum.toLowerCase().includes("no bbs")
+  );
+}
+
 function getDrawingNumber(rel: RelationshipRecord): string {
   // Try flat field first (Kausik's schema)
   if (rel.drawing_number) return rel.drawing_number;
@@ -106,7 +116,16 @@ function isPending(status: string): boolean {
   return status === "Proposed" || status === "Pending";
 }
 
-function ConfidenceBar({ score }: { score: number }) {
+function ConfidenceBar({ score, isStandalone }: { score: number; isStandalone?: boolean }) {
+  if (isStandalone) {
+    return (
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700">
+        <FileText className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+        <span className="text-xs font-bold">Standalone Sheet</span>
+      </div>
+    );
+  }
+
   const normalized = score > 1 ? score / 100 : score;
   const pct = Math.round(normalized * 100);
   const color =
@@ -153,7 +172,6 @@ export default function RelationshipConfirmation({
   onAllConfirmed,
 }: {
   projectId: string;
-  // relationships prop is intentionally removed — component owns its own data fetching
   onAllConfirmed?: () => void;
 }) {
   const [relationships, setRelationships] = useState<RelationshipRecord[]>([]);
@@ -164,8 +182,11 @@ export default function RelationshipConfirmation({
   const [actionError, setActionError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  // Shared workspace context — drives the default selected submission so
-  // every Register AI tab stays in sync on the same active submission.
+  // Multi-select state
+  const [selectedRelIds, setSelectedRelIds] = useState<string[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
+  // Shared workspace context
   const { activeSubmissionId, activeSubmissionNo } = useProjectWorkspace();
 
   // Submissions (ZIP Batches)
@@ -186,9 +207,6 @@ export default function RelationshipConfirmation({
       const sorted = submissionsArray.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setSubmissions(sorted);
       if (sorted && sorted.length > 0) {
-        // Default to the shared active submission when available; otherwise
-        // fall back to the latest submission. This keeps this tab in sync
-        // with the rest of the Register AI workspace.
         const activeId = activeSubmissionId;
         const match = activeId ? sorted.find((s: any) => s.id === activeId) : null;
         setSelectedSubmission(match ? match.id : sorted[0].id);
@@ -206,7 +224,6 @@ export default function RelationshipConfirmation({
     setFetchError(null);
     try {
       const data = await getRelationships(projectId);
-      // Ensure we always set an array, even if API returns null/undefined
       setRelationships(Array.isArray(data) ? data : []);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load relationships.";
@@ -220,7 +237,6 @@ export default function RelationshipConfirmation({
   useEffect(() => {
     fetchData();
     fetchSubmissions();
-    // Re-fetch when zip processing completes
     const handleZipDone = () => {
       fetchData();
       fetchSubmissions();
@@ -229,10 +245,6 @@ export default function RelationshipConfirmation({
     return () => window.removeEventListener("zip-processing-completed", handleZipDone);
   }, [fetchData, fetchSubmissions]);
 
-  // Keep the local selector in sync with the shared active submission.
-  // When the workspace active submission changes (e.g. a new ZIP finishes or
-  // the user switches submission from another tab), follow it as long as it
-  // exists in the loaded submissions list.
   useEffect(() => {
     if (!activeSubmissionId || submissions.length === 0) return;
     const exists = submissions.some((s) => s.id === activeSubmissionId);
@@ -241,7 +253,6 @@ export default function RelationshipConfirmation({
     }
   }, [activeSubmissionId, submissions, selectedSubmission]);
 
-  // Update workspace current_stage to "Relationship" on mount
   useEffect(() => {
     async function updateWorkspaceStage() {
       try {
@@ -253,9 +264,7 @@ export default function RelationshipConfirmation({
     updateWorkspaceStage();
   }, [projectId]);
 
-  // ── Derived state filtered by selected submission ───────────────────────────
-  // Sort by drawing_number ascending so drawings appear in proper sequential
-  // order (e.g. B5-025, B5-026, B5-027, ...) instead of random order.
+  // ── Derived state ───────────────────────────────────────────────────────────
   const filteredRelationships = relationships
     .filter((r) => !selectedSubmission || r.zip_package === selectedSubmission)
     .slice()
@@ -264,11 +273,38 @@ export default function RelationshipConfirmation({
       const bNum = b.drawing_number || "";
       return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
     });
+
   const pending = filteredRelationships.filter((r) => isPending(r.status));
   const confirmed = filteredRelationships.filter((r) => r.status === "Confirmed");
   const rejected = filteredRelationships.filter((r) => r.status === "Rejected");
-  const highConf = pending.filter((r) => parseFloat(r.confidence_score) >= 0.9);
+
+  // Group into Matched Pairings vs Standalone Drawings
+  const matchedPairings = filteredRelationships.filter((r) => !checkIsStandalone(r));
+  const standaloneDrawings = filteredRelationships.filter((r) => checkIsStandalone(r));
+
+  const highConf = pending.filter((r) => !checkIsStandalone(r) && parseFloat(r.confidence_score) >= 0.9);
+  const pendingStandalone = pending.filter((r) => checkIsStandalone(r));
+
   const allResolved = pending.length === 0;
+
+  // Multi-select helpers
+  const isAllSelected = filteredRelationships.length > 0 && selectedRelIds.length === filteredRelationships.length;
+  
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedRelIds([]);
+    } else {
+      setSelectedRelIds(filteredRelationships.map((r) => r.id));
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    if (selectedRelIds.includes(id)) {
+      setSelectedRelIds(selectedRelIds.filter((item) => item !== id));
+    } else {
+      setSelectedRelIds([...selectedRelIds, id]);
+    }
+  };
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const mutate = async (relId: string, action: "confirm" | "reject") => {
@@ -294,10 +330,31 @@ export default function RelationshipConfirmation({
     }
   };
 
-  const bulkConfirm = async () => {
+  // Bulk Actions
+  const bulkConfirmHighConf = async () => {
+    setIsBulkProcessing(true);
     for (const rel of highConf) {
       await mutate(rel.id, "confirm");
     }
+    setIsBulkProcessing(false);
+  };
+
+  const bulkConfirmStandalone = async () => {
+    setIsBulkProcessing(true);
+    for (const rel of pendingStandalone) {
+      await mutate(rel.id, "confirm");
+    }
+    setIsBulkProcessing(false);
+  };
+
+  const bulkActionSelected = async (action: "confirm" | "reject") => {
+    if (selectedRelIds.length === 0) return;
+    setIsBulkProcessing(true);
+    for (const id of selectedRelIds) {
+      await mutate(id, action);
+    }
+    setSelectedRelIds([]);
+    setIsBulkProcessing(false);
   };
 
   const handleGenerate = async () => {
@@ -347,7 +404,7 @@ export default function RelationshipConfirmation({
     );
   }
 
-  // ── Empty state (no relationships yet) ───────────────────────────────────────
+  // ── Empty state ──────────────────────────────────────────────────────────────
   if (relationships.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
@@ -367,18 +424,22 @@ export default function RelationshipConfirmation({
     );
   }
 
-  // ── Main render ──────────────────────────────────────────────────────────────
+  // ── Render Single Row ───────────────────────────────────────────────────────
   const renderRow = (rel: RelationshipRecord) => {
     const score = parseFloat(rel.confidence_score);
     const isExpanded = expanded === rel.id;
+    const isStandalone = checkIsStandalone(rel);
     const drawingNum = getDrawingNumber(rel);
-    const bbsNum = getBBSNumber(rel);
+    const bbsNum = isStandalone ? "No BBS Required" : getBBSNumber(rel);
+    const isChecked = selectedRelIds.includes(rel.id);
 
     return (
       <div
         key={rel.id}
         className={`border rounded-xl overflow-hidden transition-all ${
-          rel.status === "Confirmed"
+          isChecked
+            ? "border-blue-400 ring-2 ring-blue-500/20 bg-blue-50/20"
+            : rel.status === "Confirmed"
             ? "border-emerald-200 bg-emerald-50/40"
             : rel.status === "Rejected"
             ? "border-red-200 bg-red-50/40 opacity-60"
@@ -386,7 +447,15 @@ export default function RelationshipConfirmation({
         }`}
       >
         {/* Row summary */}
-        <div className="flex items-center gap-4 px-5 py-4">
+        <div className="flex items-center gap-4 px-5 py-3.5">
+          {/* Multi-select Checkbox */}
+          <input
+            type="checkbox"
+            checked={isChecked}
+            onChange={() => toggleSelectRow(rel.id)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+          />
+
           {/* Expand toggle */}
           <button
             onClick={() => setExpanded(isExpanded ? null : rel.id)}
@@ -399,7 +468,7 @@ export default function RelationshipConfirmation({
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <FileText className="h-4 w-4 text-blue-500 shrink-0" />
             <div className="min-w-0">
-              <p className="text-xs text-slate-400 font-medium">Drawing</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Drawing</p>
               <p className="text-sm font-semibold text-slate-800 truncate">{drawingNum}</p>
               <p className="text-xs text-slate-400">Rev: {getDrawingRevision(rel)}</p>
             </div>
@@ -409,17 +478,19 @@ export default function RelationshipConfirmation({
 
           {/* BBS */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Package className="h-4 w-4 text-violet-500 shrink-0" />
+            <Package className={isStandalone ? "h-4 w-4 text-slate-400 shrink-0" : "h-4 w-4 text-violet-500 shrink-0"} />
             <div className="min-w-0">
-              <p className="text-xs text-slate-400 font-medium">BBS</p>
-              <p className="text-sm font-semibold text-slate-800 truncate">{bbsNum}</p>
-              <p className="text-xs text-slate-400">Rev: {getBBSRevision(rel)}</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">BBS</p>
+              <p className={`text-sm font-semibold truncate ${isStandalone ? "text-slate-500 italic" : "text-slate-800"}`}>
+                {bbsNum}
+              </p>
+              <p className="text-xs text-slate-400">Rev: {isStandalone ? "—" : getBBSRevision(rel)}</p>
             </div>
           </div>
 
-          {/* Confidence */}
+          {/* Confidence / Standalone Badge */}
           <div className="shrink-0">
-            <ConfidenceBar score={isNaN(score) ? 0 : score} />
+            <ConfidenceBar score={isNaN(score) ? 0 : score} isStandalone={isStandalone} />
           </div>
 
           {/* Status */}
@@ -433,7 +504,7 @@ export default function RelationshipConfirmation({
               <button
                 onClick={() => mutate(rel.id, "confirm")}
                 disabled={!!actionLoading[rel.id]}
-                title="Confirm Relationship"
+                title="Confirm / Accept"
                 className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 disabled:opacity-50 transition-colors"
               >
                 {actionLoading[rel.id] === "confirm" ? (
@@ -445,7 +516,7 @@ export default function RelationshipConfirmation({
               <button
                 onClick={() => mutate(rel.id, "reject")}
                 disabled={!!actionLoading[rel.id]}
-                title="Reject Relationship"
+                title="Reject / Dismiss"
                 className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 disabled:opacity-50 transition-colors"
               >
                 {actionLoading[rel.id] === "reject" ? (
@@ -472,29 +543,27 @@ export default function RelationshipConfirmation({
                   <span className="text-slate-400">Revision: </span>
                   <span className="font-semibold text-slate-700">{getDrawingRevision(rel)}</span>
                 </p>
-                <p>
-                  <span className="text-slate-400">AI Confidence: </span>
-                  <span className="font-semibold text-slate-700">
-                    {isNaN(score) ? "—" : `${Math.round((score > 1 ? score / 100 : score) * 100)}%`}
-                  </span>
-                </p>
               </div>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">BBS Details</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">BBS Status</p>
               <div className="space-y-1">
                 <p>
-                  <span className="text-slate-400">Number: </span>
+                  <span className="text-slate-400">BBS Reference: </span>
                   <span className="font-semibold text-slate-700">{bbsNum}</span>
                 </p>
-                <p>
-                  <span className="text-slate-400">Revision: </span>
-                  <span className="font-semibold text-slate-700">{getBBSRevision(rel)}</span>
-                </p>
-                <p>
-                  <span className="text-slate-400">Total Weight: </span>
-                  <span className="font-semibold text-slate-700">{getTotalWeight(rel)}</span>
-                </p>
+                {!isStandalone && (
+                  <>
+                    <p>
+                      <span className="text-slate-400">Revision: </span>
+                      <span className="font-semibold text-slate-700">{getBBSRevision(rel)}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-400">Total Weight: </span>
+                      <span className="font-semibold text-slate-700">{getTotalWeight(rel)}</span>
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -517,8 +586,7 @@ export default function RelationshipConfirmation({
         <div>
           <h3 className="text-xl font-bold text-gray-900">Relationship Confirmation</h3>
           <p className="text-sm text-slate-500 mt-1">
-            Review AI-proposed links between Drawing sheets and BBS files. Confirm or reject each match before
-            generating the Register.
+            Review AI-matched Drawing sheets and BBS files, or confirm Standalone Drawings before generating the Register.
           </p>
         </div>
 
@@ -575,34 +643,113 @@ export default function RelationshipConfirmation({
         </div>
       )}
 
-      {/* Bulk confirm toolbar */}
-      {highConf.length > 0 && (
-        <div className="flex items-center justify-between bg-brand-50 border border-brand-200 rounded-xl px-5 py-3">
-          <div className="flex items-center gap-2 text-brand-700">
-            <Zap className="h-4 w-4 text-brand-500" />
-            <span className="text-sm font-semibold">{highConf.length} relationships have ≥90% confidence</span>
+      {/* Presets Toolbar (Bulk High Conf & Bulk Standalone) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-5 py-3">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <span>Select All ({filteredRelationships.length})</span>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {highConf.length > 0 && (
+            <button
+              onClick={bulkConfirmHighConf}
+              disabled={isBulkProcessing}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Confirm {highConf.length} High Conf (≥90%)
+            </button>
+          )}
+
+          {pendingStandalone.length > 0 && (
+            <button
+              onClick={bulkConfirmStandalone}
+              disabled={isBulkProcessing}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Confirm {pendingStandalone.length} Standalone Drawings
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Sticky Floating Bulk Actions Bar (when 1+ items checked) */}
+      {selectedRelIds.length > 0 && (
+        <div className="sticky top-4 z-40 bg-slate-900 text-white rounded-xl p-4 shadow-2xl flex items-center justify-between animate-fade-in border border-slate-700">
+          <div className="flex items-center gap-3">
+            <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+              {selectedRelIds.length} Selected
+            </span>
+            <p className="text-xs text-slate-300 font-medium">Apply bulk decision to checked rows:</p>
           </div>
-          <button
-            onClick={bulkConfirm}
-            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-sm"
-          >
-            <Zap className="h-4 w-4" />
-            Bulk Confirm High Confidence
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => bulkActionSelected("confirm")}
+              disabled={isBulkProcessing}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Bulk Confirm Selected
+            </button>
+            <button
+              onClick={() => bulkActionSelected("reject")}
+              disabled={isBulkProcessing}
+              className="px-4 py-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <XCircle className="h-4 w-4" />
+              Bulk Reject Selected
+            </button>
+            <button
+              onClick={() => setSelectedRelIds([])}
+              className="text-xs text-slate-400 hover:text-white px-2 py-1 transition-colors"
+            >
+              Clear Selection
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Relationship list */}
-      <div className="space-y-3">
-        {filteredRelationships.length > 0 ? (
-          filteredRelationships.map(renderRow)
-        ) : (
+      {/* Categorized Lists */}
+      <div className="space-y-6">
+        {/* Section 1: Matched Pairings (Drawing <-> BBS) */}
+        {matchedPairings.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+              <Zap className="h-4 w-4 text-emerald-500" />
+              <span>Matched Pairings — Drawing ↔ BBS ({matchedPairings.length})</span>
+            </div>
+            <div className="space-y-2">
+              {matchedPairings.map(renderRow)}
+            </div>
+          </div>
+        )}
+
+        {/* Section 2: Standalone Drawings (No BBS Required) */}
+        {standaloneDrawings.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+              <FileText className="h-4 w-4 text-blue-500" />
+              <span>Standalone Drawing Sheets — No BBS Required ({standaloneDrawings.length})</span>
+            </div>
+            <div className="space-y-2">
+              {standaloneDrawings.map(renderRow)}
+            </div>
+          </div>
+        )}
+
+        {filteredRelationships.length === 0 && (
           <div className="py-10 px-4 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
             <Package className="h-8 w-8 text-slate-300 mx-auto mb-2" />
             <p className="text-sm font-medium text-slate-600">No AI relationships proposed for this submission.</p>
-            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-              If this package contains standalone drawing sheets without BBS files, click <strong>Generate Register</strong> below to compile drawing sheets directly.
-            </p>
           </div>
         )}
       </div>
@@ -617,10 +764,8 @@ export default function RelationshipConfirmation({
           <p className="text-sm font-semibold text-slate-700">Ready to generate the Register?</p>
           <p className="text-xs text-slate-400 mt-0.5">
             {pending.length > 0
-              ? `${pending.length} relationship(s) still pending. Resolve all before generating.`
-              : filteredRelationships.length === 0
-              ? "No relationships proposed. Compile the register directly to review drawing sheets for this submission."
-              : "All relationships have been reviewed. Click to compile the Register."}
+              ? `${pending.length} item(s) pending review. Confirm or reject to generate the Register.`
+              : "All relationships & standalone drawings have been reviewed. Click to compile the Register."}
           </p>
         </div>
         <button
