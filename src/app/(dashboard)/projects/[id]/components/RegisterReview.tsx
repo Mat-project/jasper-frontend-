@@ -77,6 +77,7 @@ export default function RegisterReview({
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [approving, setApproving] = useState(false);
   const [approvalNotes, setApprovalNotes] = useState("");
+  const [isFullWidthTable, setIsFullWidthTable] = useState(false);
 
   // Shared workspace context — used for the Active Submission banner and to
   // keep the local submission selector in sync with the rest of the tabs.
@@ -751,6 +752,16 @@ export default function RegisterReview({
                 );
               })}
             </select>
+
+            {/* Table Width Toggle */}
+            <button
+              onClick={() => setIsFullWidthTable((prev) => !prev)}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors flex items-center gap-1.5"
+              title="Toggle expanded table layout"
+            >
+              {isFullWidthTable ? "Compact View" : "Expanded View"}
+            </button>
+
             <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
               Interactive Sheet
             </span>
@@ -764,20 +775,17 @@ export default function RegisterReview({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <div className="min-w-[1500px] divide-y divide-slate-100">
+            <div className={cn("divide-y divide-slate-100 transition-all", isFullWidthTable ? "min-w-[2000px]" : "min-w-[1400px]")}>
               {/* Column headers */}
-              <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50/50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 items-center">
-                <div className="col-span-1 flex items-center justify-center">Actions</div>
-                <div className="col-span-1">Dwg No</div>
-                <div className="col-span-2">Drawing Title</div>
-                <div className="col-span-1">BBS No</div>
-                <div className="col-span-1">Weight</div>
-                <div className="col-span-1">Sheet</div>
-                <div className="col-span-1">Dwg Rev</div>
-                <div className="col-span-1">BBS Rev</div>
-                <div className="col-span-1">Drawn By</div>
-                <div className="col-span-1">Checked By</div>
-                <div className="col-span-1">Section</div>
+              <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50/80 text-xs font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200 items-center">
+                <div className="col-span-1 flex items-center justify-center text-[11px]">Actions</div>
+                <div className="col-span-2">Drawing Number</div>
+                <div className="col-span-3">Drawing Title</div>
+                <div className="col-span-2">BBS Reference</div>
+                <div className="col-span-1 text-right">Weight</div>
+                <div className="col-span-1 text-center">Sheet</div>
+                <div className="col-span-1 text-center">Dwg Rev</div>
+                <div className="col-span-1">Section / Author</div>
               </div>
 
               {visibleRows.map((row, index) => {
@@ -787,17 +795,17 @@ export default function RegisterReview({
                 return (
                   <div key={row.id} id={`row-${row.id}`} className="transition-all duration-300">
                     <div
-                      className={`grid grid-cols-12 gap-3 px-5 py-2.5 items-center text-xs border-l-4 ${
+                      className={`grid grid-cols-12 gap-3 px-5 py-3 items-center text-xs md:text-sm border-l-4 ${
                         hasIssues 
                           ? "border-l-rose-500 bg-rose-50/10" 
-                          : "border-l-transparent hover:bg-slate-50/50"
+                          : "border-l-transparent hover:bg-slate-50/70"
                       } transition-colors`}
                     >
                       {/* Actions */}
-                      <div className="col-span-1 flex items-center justify-center gap-1">
+                      <div className="col-span-1 flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => setExpandedRow(isExpanded ? null : row.id)}
-                          className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-700"
+                          className="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-slate-800 transition-colors"
                           title="View validation report details"
                         >
                           {isExpanded ? (
@@ -809,45 +817,48 @@ export default function RegisterReview({
                         {!isReadOnly && (
                           <button
                             onClick={() => handleDeleteRow(row.id)}
-                            className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors"
+                            className="p-1 hover:bg-rose-100 rounded text-slate-400 hover:text-rose-600 transition-colors"
                             title="Delete row"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
 
                       {/* Drawing Number */}
-                      <div className="col-span-1">
+                      <div className="col-span-2">
                         <input
                           type="text"
                           value={row.drawing_number}
                           onChange={(e) => handleCellChange(row.id, "drawing_number", e.target.value)}
-                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-900"
+                          className="w-full bg-transparent border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 hover:bg-slate-100/70 px-2 py-1.5 rounded font-mono text-xs font-bold text-blue-700 outline-none transition-all"
+                          title={row.drawing_number}
                           disabled={isReadOnly}
                         />
                       </div>
 
                       {/* Drawing Title */}
-                      <div className="col-span-2">
+                      <div className="col-span-3">
                         <input
                           type="text"
                           value={row.drawing_title || ""}
                           onChange={(e) => handleCellChange(row.id, "drawing_title", e.target.value)}
-                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded text-[11px] outline-none text-slate-800"
-                          placeholder="Title..."
+                          className="w-full bg-transparent border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 hover:bg-slate-100/70 px-2 py-1.5 rounded text-xs font-semibold text-slate-800 outline-none transition-all truncate"
+                          placeholder="Drawing Title..."
+                          title={row.drawing_title || ""}
                           disabled={isReadOnly}
                         />
                       </div>
 
                       {/* BBS Numbers */}
-                      <div className="col-span-1">
+                      <div className="col-span-2">
                         <input
                           type="text"
                           value={row.bbs_numbers || ""}
                           onChange={(e) => handleCellChange(row.id, "bbs_numbers", e.target.value)}
-                          className="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 hover:bg-slate-100/50 px-1 py-0.5 rounded font-mono text-[11px] outline-none text-slate-800"
-                          placeholder="BBS No..."
+                          className="w-full bg-transparent border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 hover:bg-slate-100/70 px-2 py-1.5 rounded font-mono text-xs text-slate-700 outline-none transition-all truncate"
+                          placeholder="No BBS..."
+                          title={row.bbs_numbers || "No BBS"}
                           disabled={isReadOnly}
                         />
                       </div>

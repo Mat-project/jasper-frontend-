@@ -149,27 +149,29 @@ function ProjectDetailsContent({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]); // IMPORTANT: activeTab and searchParams intentionally excluded — adding them causes re-fetch on every tab switch
 
-  useEffect(() => {
-    if (project) {
-      fetchRegisterData();
+  const handleTabChange = React.useCallback((tabId: "Extraction" | "Relationships" | "Review" | "Revisions" | "Transmittals") => {
+    setActiveTab(tabId);
+    if (typeof window !== "undefined") {
+      const currentParams = new URLSearchParams(window.location.search);
+      currentParams.set("tab", tabId);
+      router.replace(`/projects/${id}?${currentParams.toString()}`, { scroll: false });
     }
+  }, [id, router]);
 
-    // Listen for completion events from AIRegisterTab.
-    // On a successful ZIP completion:
-    //   - refresh the shared workspace (picks up the new active_submission
-    //     that the backend just set in tasks.py)
-    //   - re-fetch register data
-    //   - auto-navigate to Pending Relationships, since the user is already
-    //     inside this project
+  // Listen for completion events from AIRegisterTab.
+  // On a successful ZIP completion:
+  //   - refresh the shared workspace
+  //   - re-fetch register data
+  //   - auto-navigate to Pending Relationships
+  useEffect(() => {
     const handleZipCompleted = () => {
       fetchRegisterData();
       refreshWorkspace();
-      setActiveTab("Relationships");
+      handleTabChange("Relationships");
     };
     window.addEventListener("zip-processing-completed", handleZipCompleted);
     return () => window.removeEventListener("zip-processing-completed", handleZipCompleted);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, fetchRegisterData, refreshWorkspace]);
+  }, [fetchRegisterData, refreshWorkspace, handleTabChange]);
 
   // When the user confirms the "Newer Submission Available" prompt by clicking
   // Switch, the NewerSubmissionModal updates the workspace and emits this
@@ -301,7 +303,7 @@ function ProjectDetailsContent({
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={cn(
                 "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors",
                 activeTab === tab.id
@@ -324,7 +326,7 @@ function ProjectDetailsContent({
             projectId={project.id}
             onAllConfirmed={() => {
               fetchRegisterData();
-              setActiveTab("Review"); // Auto-switch to review when relationships confirmed
+              handleTabChange("Review"); // Auto-switch to review when relationships confirmed
             }}
           />
         )}
@@ -336,7 +338,7 @@ function ProjectDetailsContent({
             rows={rows}
             onUploadNew={() => {
               fetchRegisterData();
-              setActiveTab("Revisions");
+              handleTabChange("Revisions");
             }}
             onSaveSuccess={fetchRegisterData}
             activeSubmissionId={activeSubmissionId ?? ""}
