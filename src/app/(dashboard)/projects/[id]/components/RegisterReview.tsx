@@ -23,6 +23,7 @@ import {
 import { Register, RegisterRow, updateWorkspace } from "@/lib/api/register_ai";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
+import { cn } from "@/lib/utils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -775,7 +776,7 @@ export default function RegisterReview({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <div className={cn("divide-y divide-slate-100 transition-all", isFullWidthTable ? "min-w-[2000px]" : "min-w-[1400px]")}>
+            <div className={`${isFullWidthTable ? "min-w-[2000px]" : "min-w-[1400px]"} divide-y divide-slate-100 transition-all`}>
               {/* Column headers */}
               <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50/80 text-xs font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200 items-center">
                 <div className="col-span-1 flex items-center justify-center text-[11px]">Actions</div>
