@@ -82,6 +82,7 @@ export default function TransmittalTab({
 
   // State
   const [targetCompany, setTargetCompany] = useState("");
+  const [senderAccount, setSenderAccount] = useState("domain");
   const [toField, setToField] = useState("");
   const [ccField, setCcField] = useState("");
   const [bccField, setBccField] = useState("");
@@ -629,6 +630,7 @@ Jasper Detailing Services`;
     }));
 
     const payload = {
+      senderAccount: senderAccount,
       to: toField,
       cc: ccField,
       bcc: bccField,
@@ -741,7 +743,25 @@ Jasper Detailing Services`;
                     Certified
                   </span>
                 </div>
-              )}
+              {/* Sender Account Channel Selector */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
+                  <span>Sender Account Channel</span>
+                  <span className="text-[10px] font-normal text-slate-400">Select outgoing mail account</span>
+                </label>
+                <select
+                  value={senderAccount}
+                  onChange={(e) => setSenderAccount(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                >
+                  <option value="domain">
+                    🔹 Domain Email: jaspermdu_submission@alef-jasper.com (Verified 100% Inboxing)
+                  </option>
+                  <option value="personal_gmail">
+                    🔸 Personal Gmail: jasperalef1@gmail.com (Native Google Dispatch)
+                  </option>
+                </select>
+              </div>
 
               {/* Submission Selector */}
               <div>
