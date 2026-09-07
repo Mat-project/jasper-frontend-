@@ -743,6 +743,8 @@ Jasper Detailing Services`;
                     Certified
                   </span>
                 </div>
+              )}
+
               {/* Sender Account Channel Selector */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
