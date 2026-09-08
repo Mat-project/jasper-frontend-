@@ -11,7 +11,6 @@ import {
   X,
   Edit2,
   FileSpreadsheet,
-  Mail,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
@@ -267,12 +266,7 @@ function ProjectDetailsContent({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push(`/projects/${id}/kani`)}
-              className="px-4 py-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
-            >
-              <Mail className="h-4 w-4" /> Mini-Gmail Workspace
-            </button>
+
             <button
               onClick={async () => {
                 try {
