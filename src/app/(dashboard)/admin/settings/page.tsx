@@ -1,16 +1,19 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { getSystemSettings, updateSystemSetting, createSystemSetting, uploadCompanyFile } from "@/lib/api/settings";
+import { getAIUsageStats, type AIUsageStatsResponse } from "@/lib/api/aiUsage";
 import { getBaseUrl } from "@/lib/api/client";
-import { Settings, ShieldAlert, Users2, Save, CheckCircle, RefreshCw, Building2, UploadCloud } from "lucide-react";
+import { Settings, ShieldAlert, Users2, Save, CheckCircle, RefreshCw, Building2, UploadCloud, Sparkles, Cpu, AlertTriangle, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "user" | "security" | "company">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "company" | "ai" | "user" | "security">("general");
   const [isSaved, setIsSaved] = useState(false);
+
+  // AI Usage State
+  const [aiStats, setAiStats] = useState<AIUsageStatsResponse | null>(null);
+  const [loadingAiStats, setLoadingAiStats] = useState(false);
 
   // Form State
   const [generalValues, setGeneralValues] = useState({
@@ -73,7 +76,7 @@ export default function SettingsPage() {
       if (settingsMap.sessionTimeoutMinutes !== undefined) setSecurityValues(prev => ({ ...prev, sessionTimeoutMinutes: settingsMap.sessionTimeoutMinutes }));
       if (settingsMap.mfaRequired !== undefined) setSecurityValues(prev => ({ ...prev, mfaRequired: settingsMap.mfaRequired }));
 
-      if (settingsMap.company_profile !== undefined) {
+        if (settingsMap.company_profile !== undefined) {
         setCompanyValues(prev => ({
           ...prev,
           ...settingsMap.company_profile,
@@ -87,9 +90,27 @@ export default function SettingsPage() {
     }
   };
 
+  const loadAiStats = async () => {
+    setLoadingAiStats(true);
+    try {
+      const data = await getAIUsageStats();
+      setAiStats(data);
+    } catch (err) {
+      console.error("Failed to load AI usage stats:", err);
+    } finally {
+      setLoadingAiStats(false);
+    }
+  };
+
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "ai") {
+      loadAiStats();
+    }
+  }, [activeTab]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,12 +170,12 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-5xl">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-extrabold text-foreground tracking-tight">System Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Configure security baselines, user registration policies, and generic application parameters.
+          Configure security baselines, AI API token tracking, company profile, and generic application parameters.
         </p>
       </div>
 
@@ -164,6 +185,7 @@ export default function SettingsPage() {
           {[
             { id: "general" as const, label: "General", icon: Settings },
             { id: "company" as const, label: "Company Profile", icon: Building2 },
+            { id: "ai" as const, label: "AI & Spend Tracker", icon: Sparkles },
             { id: "user" as const, label: "Users", icon: Users2 },
             { id: "security" as const, label: "Security", icon: ShieldAlert },
           ].map((tab) => (
@@ -486,21 +508,187 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Save trigger */}
-            <div className="flex justify-end pt-4 border-t border-border mt-6">
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg text-sm shadow-md transition-colors disabled:opacity-50"
-              >
-                {saving ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
+            {/* AI & SPEND TRACKER */}
+            {activeTab === "ai" && (
+              <div className="space-y-6 animate-fade-in">
+                {/* AI Header & Controls */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-brand-500" />
+                      Google Gemini AI Token & Spend Telemetry
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Live tracking of multimodal API calls, token counts, INR cost, and spend cap protection.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={loadAiStats}
+                      disabled={loadingAiStats}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-foreground rounded-lg text-xs font-medium transition"
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5", loadingAiStats && "animate-spin")} />
+                      Refresh
+                    </button>
+                    <a
+                      href="https://aistudio.google.com/spend"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 rounded-lg text-xs font-semibold transition"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      AI Studio Spend
+                    </a>
+                  </div>
+                </div>
+
+                {/* Quota / Spend Cap Alert Banner if 429 errors exist */}
+                {aiStats && aiStats.summary.quota_exceeded_requests > 0 && (
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3 text-xs text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                    <div>
+                      <p className="font-semibold">Spend Cap / 429 Quota Block Detected ({aiStats.summary.quota_exceeded_requests} blocked calls)</p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        Your backend Circuit Breaker successfully intercepted these requests to protect your account. Ensure your billing spend cap in Google AI Studio is raised or unblocked.
+                      </p>
+                    </div>
+                  </div>
                 )}
-                Save Settings
-              </button>
-            </div>
+
+                {/* Summary Metrics Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-4 bg-slate-500/5 border border-border rounded-xl space-y-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Est. Spend</span>
+                    <p className="text-xl font-bold text-foreground">₹{aiStats?.summary.total_cost_inr.toFixed(2) || "0.00"}</p>
+                    <span className="text-[10px] text-muted-foreground block">~₹0.006 / 1k input tokens</span>
+                  </div>
+
+                  <div className="p-4 bg-slate-500/5 border border-border rounded-xl space-y-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Tokens</span>
+                    <p className="text-xl font-bold text-foreground">{aiStats?.summary.total_tokens.toLocaleString() || "0"}</p>
+                    <span className="text-[10px] text-muted-foreground block">
+                      In: {aiStats?.summary.total_prompt_tokens.toLocaleString() || 0} | Out: {aiStats?.summary.total_completion_tokens.toLocaleString() || 0}
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-slate-500/5 border border-border rounded-xl space-y-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Success Rate</span>
+                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                      {aiStats?.summary.success_rate !== undefined ? `${aiStats.summary.success_rate}%` : "100%"}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground block">
+                      {aiStats?.summary.success_requests || 0} of {aiStats?.summary.total_requests || 0} calls
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-slate-500/5 border border-border rounded-xl space-y-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Active Engine</span>
+                    <p className="text-sm font-bold text-brand-600 dark:text-brand-400 truncate mt-1">
+                      {aiStats?.summary.active_model || "gemini-1.5-flash"}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground block">Vision Cropping Enabled</span>
+                  </div>
+                </div>
+
+                {/* Telemetry Request Logs Table */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Recent AI API Calls ({aiStats?.logs.length || 0})</h4>
+                    <span className="text-[10px] text-muted-foreground">Showing latest 50 requests</span>
+                  </div>
+
+                  {loadingAiStats ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+                    </div>
+                  ) : !aiStats || aiStats.logs.length === 0 ? (
+                    <div className="p-8 text-center border border-dashed border-border rounded-xl">
+                      <Cpu className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+                      <p className="text-xs text-muted-foreground">No AI API requests recorded yet.</p>
+                      <p className="text-[10px] text-muted-foreground/80 mt-1">
+                        Upload a ZIP package in the Projects workspace to see live per-file token usage and costs here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-border rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-500/10 text-muted-foreground font-semibold border-b border-border">
+                          <tr>
+                            <th className="py-2.5 px-3">Timestamp</th>
+                            <th className="py-2.5 px-3">File / Task</th>
+                            <th className="py-2.5 px-3">Project / Sub</th>
+                            <th className="py-2.5 px-3">Tokens (In / Out)</th>
+                            <th className="py-2.5 px-3">Cost (INR)</th>
+                            <th className="py-2.5 px-3">Status</th>
+                            <th className="py-2.5 px-3">Latency</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {aiStats.logs.map((log) => (
+                            <tr key={log.id} className="hover:bg-slate-500/5 transition">
+                              <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                                {new Date(log.created_at).toLocaleDateString()} {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </td>
+                              <td className="py-2.5 px-3 font-medium text-foreground max-w-[180px] truncate" title={log.file_name}>
+                                {log.file_name}
+                              </td>
+                              <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                                {log.project_code || "—"} {log.submission_no ? `(${log.submission_no})` : ""}
+                              </td>
+                              <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                                <span className="font-semibold text-foreground">{log.total_tokens.toLocaleString()}</span>
+                                <span className="text-[10px] text-muted-foreground/70 ml-1">({log.prompt_tokens} / {log.completion_tokens})</span>
+                              </td>
+                              <td className="py-2.5 px-3 font-semibold text-foreground whitespace-nowrap">
+                                ₹{log.cost_inr.toFixed(4)}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                {log.status === "SUCCESS" ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                                    Success
+                                  </span>
+                                ) : log.status === "QUOTA_EXCEEDED" ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400" title={log.error_message || ""}>
+                                    429 Quota Exceeded
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/15 text-red-600 dark:text-red-400" title={log.error_message || ""}>
+                                    Error
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                                {log.latency_ms ? `${(log.latency_ms / 1000).toFixed(2)}s` : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Save trigger (only for editable configuration tabs) */}
+            {activeTab !== "ai" && (
+              <div className="flex justify-end pt-4 border-t border-border mt-6">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg text-sm shadow-md transition-colors disabled:opacity-50"
+                >
+                  {saving ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save Settings
+                </button>
+              </div>
+            )}
           </form>
         </div>
       </div>
