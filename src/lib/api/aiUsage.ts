@@ -35,6 +35,6 @@ export interface AIUsageStatsResponse {
 }
 
 export async function getAIUsageStats(): Promise<AIUsageStatsResponse> {
-  const response = await apiClient.get<AIUsageStatsResponse>("/api/v1/register-ai/ai-usage/");
+  const response = await apiClient.get<AIUsageStatsResponse>("/api/v1/register_ai/ai-usage/");
   return response.data;
 }
