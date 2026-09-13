@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { getSystemSettings, updateSystemSetting, createSystemSetting, uploadCompanyFile } from "@/lib/api/settings";
 import { getAIUsageStats, type AIUsageStatsResponse } from "@/lib/api/aiUsage";
