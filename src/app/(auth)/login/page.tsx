@@ -40,11 +40,15 @@ export default function LoginPage() {
     <div className="rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-8 shadow-2xl animate-fade-in">
       {/* Logo / Brand */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-brand-500 mb-4 shadow-lg">
-          <span className="text-white font-bold text-xl">E</span>
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl overflow-hidden mb-4 shadow-xl border border-white/20 bg-black">
+          <img
+            src="/jasper-company-logo.jpeg"
+            alt="Jasper Company Logo"
+            className="w-full h-full object-cover"
+          />
         </div>
-        <h1 className="text-2xl font-bold text-white">EOMS</h1>
-        <p className="text-sm text-white/60 mt-1">Engineering Operations Management</p>
+        <h1 className="text-2xl font-bold text-white tracking-wide">JASPER EOMS</h1>
+        <p className="text-sm text-white/70 mt-1">Engineering Operations Management System</p>
       </div>
 
       {/* Form */}

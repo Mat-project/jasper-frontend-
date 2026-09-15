@@ -212,14 +212,32 @@ export async function exportProjectRegister(
   return res.data as Blob;
 }
 
-/** Download monthly company-wide mail register as Excel (JASPER MAIL REGISTER format) */
+/** Options for downloading the company-wide mail register as Excel */
+export interface ExportMonthlyOptions {
+  year?: number;
+  month?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+/** Download monthly or date-filtered company-wide mail register as Excel (JASPER MAIL REGISTER format) */
 export async function exportMonthlyRegister(
-  year: number,
-  month: number
+  yearOrOptions?: number | ExportMonthlyOptions,
+  month?: number
 ): Promise<Blob> {
+  const params: Record<string, any> = {};
+  if (typeof yearOrOptions === "object" && yearOrOptions !== null) {
+    if (yearOrOptions.start_date) params.start_date = yearOrOptions.start_date;
+    if (yearOrOptions.end_date) params.end_date = yearOrOptions.end_date;
+    if (yearOrOptions.year) params.year = yearOrOptions.year;
+    if (yearOrOptions.month) params.month = yearOrOptions.month;
+  } else if (typeof yearOrOptions === "number") {
+    params.year = yearOrOptions;
+    if (month !== undefined) params.month = month;
+  }
   const res = await apiClient.get(
     `/api/v1/register_ai/registers/export_monthly/`,
-    { params: { year, month }, responseType: "blob" }
+    { params, responseType: "blob" }
   );
   return res.data as Blob;
 }

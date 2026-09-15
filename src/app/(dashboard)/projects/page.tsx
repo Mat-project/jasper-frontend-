@@ -18,9 +18,11 @@ import {
   AlertTriangle,
   X,
   Mail,
+  Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getProjects, createProject, deleteProject, EnterpriseProject } from "@/lib/api/projects";
+import { exportMonthlyRegister } from "@/lib/api/register_ai";
 import { cn } from "@/lib/utils";
 
 /** Safely formats any backend API error response into a clean, human-readable user message. */
@@ -76,6 +78,26 @@ export default function EnterpriseProjectsPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  // Export Modal State
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<"month" | "range">("month");
+  const [exportYear, setExportYear] = useState<number>(() => new Date().getFullYear());
+  const [exportMonth, setExportMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [exportStartDate, setExportStartDate] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}-01`;
+  });
+  const [exportEndDate, setExportEndDate] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  });
+  const [isExporting, setIsExporting] = useState(false);
+
   const [addForm, setAddForm] = useState({
     code: "", name: "", client: "",
     start_date: "2026-07-01",
@@ -104,6 +126,54 @@ export default function EnterpriseProjectsPage() {
     const displayMsg = typeof message === "string" ? message : formatUserFriendlyError(message);
     setToast({ message: displayMsg, type });
     setTimeout(() => setToast(null), 5000);
+  };
+
+  const handleExportRegister = async () => {
+    setIsExporting(true);
+    try {
+      let blob: Blob;
+      let filename = "JASPER_MAIL_REGISTER.xlsx";
+
+      if (exportMode === "month") {
+        const monthNames = [
+          "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+          "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
+        ];
+        const monthName = monthNames[exportMonth - 1] || "MONTH";
+        blob = await exportMonthlyRegister({ year: exportYear, month: exportMonth });
+        filename = `JASPER_MAIL_REGISTER_${monthName}_${exportYear}.xlsx`;
+      } else {
+        if (!exportStartDate || !exportEndDate) {
+          showToast("Please select both Start Date and End Date", "error");
+          setIsExporting(false);
+          return;
+        }
+        if (new Date(exportStartDate) > new Date(exportEndDate)) {
+          showToast("Start Date cannot be after End Date", "error");
+          setIsExporting(false);
+          return;
+        }
+        blob = await exportMonthlyRegister({ start_date: exportStartDate, end_date: exportEndDate });
+        filename = `JASPER_MAIL_REGISTER_${exportStartDate}_TO_${exportEndDate}.xlsx`;
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = window.document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      window.document.body.appendChild(a);
+      a.click();
+      window.document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      showToast("Mail Register exported successfully", "success");
+      setIsExportOpen(false);
+    } catch (e: any) {
+      console.error("Export failed", e);
+      showToast(e?.message || "Failed to export mail register", "error");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const filteredProjects = projects.filter(p => 
@@ -185,30 +255,10 @@ export default function EnterpriseProjectsPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={async () => {
-              const now = new Date();
-              const year = now.getFullYear();
-              const month = now.getMonth() + 1;
-              try {
-                const { exportMonthlyRegister } = await import("@/lib/api/register_ai");
-                const blob = await exportMonthlyRegister(year, month);
-                const url = window.URL.createObjectURL(blob);
-                const a = window.document.createElement("a");
-                a.href = url;
-                a.download = `JASPER_MAIL_REGISTER_${now.toLocaleString("en-US", { month: "long" }).toUpperCase()}_${year}.xlsx`;
-                window.document.body.appendChild(a);
-                a.click();
-                window.document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                showToast("Monthly Mail Register downloaded", "success");
-              } catch (e) {
-                console.error("Export failed", e);
-                showToast("Failed to export monthly register", "error");
-              }
-            }}
+            onClick={() => setIsExportOpen(true)}
             className="px-4 py-2.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
           >
-            <Download className="h-4 w-4" /> Monthly Mail Register
+            <Download className="h-4 w-4" /> Export Mail Register
           </button>
           <button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2">
             <Plus className="h-4 w-4" /> New Project
@@ -541,6 +591,166 @@ export default function EnterpriseProjectsPage() {
               </button>
               <button onClick={() => handleDeleteProject(deleteConfirmId)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors shadow-sm">
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXPORT MAIL REGISTER MODAL */}
+      {isExportOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                  <FileSpreadsheet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Export Mail Register</h3>
+                  <p className="text-xs text-slate-500">Download Excel mail register with custom filters</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-5">
+              {/* Mode Selection Tabs */}
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-2">Export Filter Mode</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setExportMode("month")}
+                    className={cn(
+                      "py-2 text-xs font-semibold rounded-lg transition-all",
+                      exportMode === "month"
+                        ? "bg-white text-blue-700 shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    By Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExportMode("range")}
+                    className={cn(
+                      "py-2 text-xs font-semibold rounded-lg transition-all",
+                      exportMode === "range"
+                        ? "bg-white text-blue-700 shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    Custom Date Range
+                  </button>
+                </div>
+              </div>
+
+              {exportMode === "month" ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1.5">Month</label>
+                    <select
+                      value={exportMonth}
+                      onChange={(e) => setExportMonth(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-white"
+                    >
+                      {[
+                        { value: 1, label: "January" },
+                        { value: 2, label: "February" },
+                        { value: 3, label: "March" },
+                        { value: 4, label: "April" },
+                        { value: 5, label: "May" },
+                        { value: 6, label: "June" },
+                        { value: 7, label: "July" },
+                        { value: 8, label: "August" },
+                        { value: 9, label: "September" },
+                        { value: 10, label: "October" },
+                        { value: 11, label: "November" },
+                        { value: 12, label: "December" },
+                      ].map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1.5">Year</label>
+                    <select
+                      value={exportYear}
+                      onChange={(e) => setExportYear(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 bg-white"
+                    >
+                      {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1.5">Start Date</label>
+                    <input
+                      type="date"
+                      value={exportStartDate}
+                      onChange={(e) => setExportStartDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1.5">End Date</label>
+                    <input
+                      type="date"
+                      value={exportEndDate}
+                      onChange={(e) => setExportEndDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-800 leading-relaxed">
+                💡 Exports include drawing &amp; BBS records, dates, revisions, weights, and mail numbers formatted according to the standard Jasper Mail Register layout.
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsExportOpen(false)}
+                disabled={isExporting}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-sm font-semibold hover:bg-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExportRegister}
+                disabled={isExporting}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" /> Download Excel
+                  </>
+                )}
               </button>
             </div>
           </div>

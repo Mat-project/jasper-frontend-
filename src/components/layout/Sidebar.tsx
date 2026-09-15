@@ -262,13 +262,22 @@ export function Sidebar() {
     >
       {/* Brand Logo */}
       <div className="flex items-center h-16 px-4 border-b border-white/10 shrink-0 bg-slate-950/40">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-500 shrink-0 shadow-lg shadow-brand-500/20">
-          <span className="text-white font-bold text-sm">E</span>
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/20 bg-black shadow-md">
+          <img
+            src="/jasper-company-logo.jpeg"
+            alt="Jasper Logo"
+            className="w-full h-full object-cover"
+          />
         </div>
         {!collapsed && (
-          <span className="ml-3 font-bold text-white text-sm tracking-wider uppercase">
-            EOMS ({roleName})
-          </span>
+          <div className="ml-3 flex flex-col justify-center min-w-0">
+            <span className="font-bold text-white text-sm tracking-wider uppercase truncate">
+              JASPER EOMS
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium truncate">
+              {roleName}
+            </span>
+          </div>
         )}
       </div>
 
