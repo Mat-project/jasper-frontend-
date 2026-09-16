@@ -351,20 +351,23 @@ export default function RegisterReview({
     ];
     const csvRows = visibleRows.map((row) => {
       const status = row.dynamic_fields?.status || "NEW";
-      const stripRevZeros = (rev: string) => {
+      const formatRevision = (rev: string) => {
         if (!rev) return "";
-        const n = parseInt(rev, 10);
-        return isNaN(n) ? rev : String(n);
+        const trimmed = rev.trim();
+        if (/^\d+$/.test(trimmed)) {
+          return trimmed.padStart(2, "0");
+        }
+        return trimmed;
       };
       return [
         `"${(row.drawing_title || "").replace(/"/g, '""')}"`,
         `"${status.replace(/"/g, '""')}"`,
         `"${(row.drawing_number || "").replace(/"/g, '""')}"`,
-        `"${stripRevZeros(row.drawing_rev || "").replace(/"/g, '""')}"`,
+        `"${formatRevision(row.drawing_rev || "").replace(/"/g, '""')}"`,
         `"${(row.drawing_title || "").replace(/"/g, '""')}"`,
         `"${(row.sheet_no || "").replace(/"/g, '""')}"`,
         `"${(row.bbs_numbers || "").replace(/"/g, '""')}"`,
-        `"${stripRevZeros(row.bbs_revs || "").replace(/"/g, '""')}"`,
+        `"${formatRevision(row.bbs_revs || "").replace(/"/g, '""')}"`,
         `"${row.total_weight ?? ""}"`,
       ];
     });
