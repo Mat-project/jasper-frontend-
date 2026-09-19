@@ -564,7 +564,7 @@ export default function SettingsPage() {
                   <div className="p-4 bg-slate-500/5 border border-border rounded-xl space-y-1">
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Est. Spend</span>
                     <p className="text-xl font-bold text-foreground">₹{aiStats?.summary.total_cost_inr.toFixed(2) || "0.00"}</p>
-                    <span className="text-[10px] text-muted-foreground block">~₹0.006 / 1k input tokens</span>
+                    <span className="text-[10px] text-muted-foreground block">~₹0.068 / 1k input tokens</span>
                   </div>
 
                   <div className="p-4 bg-slate-500/5 border border-border rounded-xl space-y-1">
