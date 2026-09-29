@@ -12,9 +12,18 @@ const PROTECTED_PREFIX = ["/dashboard", "/employees", "/projects", "/attendance"
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
-  // Check for access token in cookies
+  // Check for access token or refresh token in cookies
   const token = request.cookies.get("eoms_access")?.value;
-  const isAuthenticated = !!token;
+  const refreshToken = request.cookies.get("eoms_refresh")?.value;
+  const isAuthenticated = !!token || !!refreshToken;
+
+  // Handle root URL directly to avoid client-side redirect exceptions
+  if (pathname === "/") {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
 
   const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
   const isProtectedRoute = PROTECTED_PREFIX.some((prefix) =>
