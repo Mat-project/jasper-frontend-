@@ -98,12 +98,19 @@ const processQueue = (error: unknown, token: string | null = null): void => {
 
 import { dispatchApiError } from "@/components/DiagnosticErrorModal";
 
-function extractErrorMessage(error: any): string {
+export function extractErrorMessage(error: any, fallback = "An unexpected API request error occurred."): string {
+  if (!error) return fallback;
+  if (typeof error === "string") return error;
+  
   if (error.response?.data) {
     const data = error.response.data;
     if (typeof data === "string") return data;
     if (data.detail && typeof data.detail === "string") return data.detail;
     if (data.error && typeof data.error === "string") return data.error;
+    if (data.error && typeof data.error === "object") {
+      if (typeof data.error.message === "string") return data.error.message;
+      if (typeof data.error.detail === "string") return data.error.detail;
+    }
     if (data.message && typeof data.message === "string") return data.message;
 
     if (typeof data === "object" && data !== null) {
@@ -115,7 +122,12 @@ function extractErrorMessage(error: any): string {
         } else if (typeof value === "string") {
           valStr = value;
         } else if (typeof value === "object" && value !== null) {
-          valStr = JSON.stringify(value);
+          const innerObj = value as Record<string, any>;
+          if (typeof innerObj.message === "string") {
+            valStr = innerObj.message;
+          } else {
+            valStr = JSON.stringify(value);
+          }
         }
 
         if (valStr) {
@@ -132,7 +144,7 @@ function extractErrorMessage(error: any): string {
       if (messages.length > 0) return messages.join(" ");
     }
   }
-  return error.message || "An unexpected API request error occurred.";
+  return typeof error.message === "string" ? error.message : fallback;
 }
 
 apiClient.interceptors.response.use(

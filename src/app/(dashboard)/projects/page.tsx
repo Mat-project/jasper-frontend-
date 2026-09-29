@@ -36,6 +36,10 @@ function formatUserFriendlyError(error: unknown): string {
   if (typeof data === "object" && data !== null) {
     if (typeof data.detail === "string") return data.detail;
     if (typeof data.error === "string") return data.error;
+    if (typeof data.error === "object" && data.error !== null) {
+      if (typeof data.error.message === "string") return data.error.message;
+      if (typeof data.error.detail === "string") return data.error.detail;
+    }
     if (typeof data.message === "string") return data.message;
 
     const messages: string[] = [];
