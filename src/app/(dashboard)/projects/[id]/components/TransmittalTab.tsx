@@ -386,10 +386,6 @@ export default function TransmittalTab({
     if (targetCompany) {
       const contactData = contacts.find(c => c.id.toString() === targetCompany);
       if (contactData) {
-        // Use contact's emails for To, but keep project default CC/BCC
-        setToField(contactData.emails);
-        setCcField(project?.mail_cc || "");
-        setBccField(project?.mail_bcc || "");
         companyName = contactData.company_name;
       }
     }
@@ -549,10 +545,19 @@ Jasper Detailing Services`;
   const handleCompanyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const contactId = e.target.value;
     setTargetCompany(contactId);
-    if (!contactId) {
-      setToField("");
-      setSubjectField("");
-      setBodyField("");
+    if (contactId) {
+      const contactData = contacts.find(c => c.id.toString() === contactId);
+      if (contactData) {
+        setToField(contactData.emails || "");
+        if (!ccField && project?.mail_cc) {
+          setCcField(project.mail_cc);
+        }
+        if (!bccField && project?.mail_bcc) {
+          setBccField(project.mail_bcc);
+        }
+      }
+    } else {
+      setToField(project?.mail_to || "");
     }
   };
 
@@ -614,6 +619,29 @@ Jasper Detailing Services`;
     }
     if (!toField.trim() || !subjectField.trim() || !bodyField.trim()) {
       showToast("Please fill in To, Subject, and Email Body fields.", "error");
+      return;
+    }
+
+    const splitEmails = (str: string) => str.split(/[,;\n]+/).map(e => e.trim()).filter(Boolean);
+    const toList = splitEmails(toField);
+    const ccList = splitEmails(ccField);
+    const bccList = splitEmails(bccField);
+    const totalRecipients = toList.length + ccList.length + bccList.length;
+
+    if (toList.length === 0) {
+      showToast("Please provide at least one valid recipient in the 'To' field.", "error");
+      return;
+    }
+
+    if (totalRecipients > 50) {
+      showToast(`Total recipients (To + Cc + Bcc) cannot exceed 50. Currently ${totalRecipients} entered.`, "error");
+      return;
+    }
+
+    const allEmails = [...toList, ...ccList, ...bccList];
+    const invalidEmail = allEmails.find(email => !email.includes("@"));
+    if (invalidEmail) {
+      showToast(`Invalid email format detected: "${invalidEmail}". Please check your recipient fields.`, "error");
       return;
     }
 
@@ -858,29 +886,32 @@ Jasper Detailing Services`;
               </div>
 
               {/* To Recipient emails */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                    To <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="comma-separated emails (e.g. engineering@client.com)"
-                    value={toField}
-                    onChange={e => setToField(e.target.value)}
-                    required
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex justify-between items-center">
+                  <span>To <span className="text-rose-500">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">Separated by commas or semicolons</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. engineering@client.com, pm@client.com"
+                  value={toField}
+                  onChange={e => setToField(e.target.value)}
+                  required
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                />
+              </div>
 
+              {/* Cc and Bcc Recipient emails */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Cc Recipient emails */}
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Cc (Optional)
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex justify-between items-center">
+                    <span>Cc (Optional)</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Up to 50 total recipients</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="carbon copy email addresses"
+                    placeholder="carbon copy emails (comma separated)"
                     value={ccField}
                     onChange={e => setCcField(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
@@ -889,12 +920,13 @@ Jasper Detailing Services`;
 
                 {/* Bcc Recipient emails */}
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Bcc (Optional)
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex justify-between items-center">
+                    <span>Bcc (Optional)</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Blind carbon copy</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="blind carbon copy email addresses"
+                    placeholder="blind copy emails (comma separated)"
                     value={bccField}
                     onChange={e => setBccField(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
