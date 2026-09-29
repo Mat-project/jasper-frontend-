@@ -37,7 +37,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { getProjects, type EnterpriseProject } from "@/lib/api/projects";
-import apiClient from "@/lib/api/client";
+import apiClient, { extractErrorMessage } from "@/lib/api/client";
 
 // Sender identity — read from public env var
 const SENDER_EMAIL = process.env.NEXT_PUBLIC_DEFAULT_FROM_EMAIL || "jasperalief1@gmail.com";
@@ -350,7 +350,7 @@ export default function MiniGmailPage() {
       console.error("Email send failed:", err);
       newEmailObj.status = "Failed";
       setEmails(prev => [newEmailObj, ...prev]);
-      const errMsg = err?.response?.data?.error || err?.message || "Could not send email";
+      const errMsg = extractErrorMessage(err, "Could not send email");
       showToast(`Send failed: ${errMsg}`, "error");
     } finally {
       setSending(false);
@@ -418,7 +418,7 @@ export default function MiniGmailPage() {
     } catch (err: any) {
       console.error("Reply failed:", err);
       replyObj.status = "Failed";
-      const errMsg = err?.response?.data?.error || err?.message || "Failed to send reply";
+      const errMsg = extractErrorMessage(err, "Failed to send reply");
       showToast(`Send failed: ${errMsg}`, "error");
     } finally {
       const currentList = [...emails];

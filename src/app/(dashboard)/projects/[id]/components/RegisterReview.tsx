@@ -389,7 +389,7 @@ export default function RegisterReview({
   const handleApproveRegister = async () => {
     setApproving(true);
     try {
-      const { default: apiClient } = await import("@/lib/api/client");
+      const { default: apiClient, extractErrorMessage } = await import("@/lib/api/client");
       const res = await apiClient.post(
         `/api/v1/projects/${projectId}/registers/${register.id}/approve/`,
         { notes: approvalNotes }
@@ -399,7 +399,8 @@ export default function RegisterReview({
       onSaveSuccess?.();
     } catch (err: any) {
       console.error("Failed to approve register", err);
-      alert(err.response?.data?.error || "Failed to sign off register. Please try again.");
+      const { extractErrorMessage } = await import("@/lib/api/client");
+      alert(extractErrorMessage(err, "Failed to sign off register. Please try again."));
     } finally {
       setApproving(false);
     }

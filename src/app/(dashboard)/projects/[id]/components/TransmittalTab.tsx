@@ -28,7 +28,7 @@ import {
   Image as ImageIcon,
   FileIcon,
 } from "lucide-react";
-import apiClient from "@/lib/api/client";
+import apiClient, { extractErrorMessage } from "@/lib/api/client";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
 import { cn } from "@/lib/utils";
@@ -690,7 +690,7 @@ Jasper Detailing Services`;
       setCustomAttachments([]);
     } catch (err: any) {
       console.error("Failed to send email via API", err);
-      showToast(err.response?.data?.error || "Failed to dispatch email. Check SMTP setup.", "error");
+      showToast(extractErrorMessage(err, "Failed to dispatch email. Check SMTP setup."), "error");
     } finally {
       setSending(false);
     }
@@ -704,7 +704,9 @@ Jasper Detailing Services`;
           {toast.type === "success" && <CheckCircle className="w-5 h-5 text-emerald-500" />}
           {toast.type === "error" && <AlertCircle className="w-5 h-5 text-rose-500" />}
           {toast.type === "info" && <Building2 className="w-5 h-5 text-blue-500" />}
-          <span className="text-sm font-medium text-slate-700">{toast.message}</span>
+          <span className="text-sm font-medium text-slate-700">
+            {typeof toast.message === "string" ? toast.message : (toast.message as any)?.message || JSON.stringify(toast.message)}
+          </span>
         </div>
       )}
 

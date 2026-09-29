@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import apiClient from "@/lib/api/client";
+import apiClient, { extractErrorMessage } from "@/lib/api/client";
 import {
   CheckCircle2,
   XCircle,
@@ -226,7 +226,7 @@ export default function RelationshipConfirmation({
       const data = await getRelationships(projectId);
       setRelationships(Array.isArray(data) ? data : []);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to load relationships.";
+      const msg = extractErrorMessage(e, "Failed to load relationships.");
       setFetchError(msg);
       setRelationships([]);
     } finally {
@@ -319,7 +319,7 @@ export default function RelationshipConfirmation({
         prev.map((r) => (r.id === relId ? { ...r, status: updated.status } : r))
       );
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.response?.data?.detail || e?.message || "Action failed. Please try again.";
+      const msg = extractErrorMessage(e, "Action failed. Please try again.");
       setActionError(msg);
     } finally {
       setActionLoading((p) => {
@@ -364,7 +364,7 @@ export default function RelationshipConfirmation({
       await generateRegister(projectId, selectedSubmission || undefined);
       onAllConfirmed?.();
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.response?.data?.detail || e?.message || "Register generation failed.";
+      const msg = extractErrorMessage(e, "Register generation failed. Please try again.");
       setActionError(msg);
     } finally {
       setGenerating(false);
@@ -639,7 +639,7 @@ export default function RelationshipConfirmation({
       {actionError && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {actionError}
+          <span>{typeof actionError === "string" ? actionError : (actionError as any)?.message || JSON.stringify(actionError)}</span>
         </div>
       )}
 

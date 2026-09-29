@@ -128,7 +128,7 @@ export function DiagnosticErrorModal() {
                 </span>
               </div>
               <h3 className="text-base font-bold text-foreground mt-0.5">
-                {currentError.title}
+                {typeof currentError.title === "string" ? currentError.title : String(currentError.title)}
               </h3>
             </div>
           </div>
@@ -157,7 +157,9 @@ export function DiagnosticErrorModal() {
               <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-rose-900 dark:text-rose-200">
-                  {currentError.message}
+                  {typeof currentError.message === "string"
+                    ? currentError.message
+                    : (currentError.message as any)?.message || JSON.stringify(currentError.message)}
                 </p>
               </div>
             </div>
