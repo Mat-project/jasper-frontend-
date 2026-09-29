@@ -40,7 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const validateSession = async () => {
       const token = getAccessToken();
-      if (!token) {
+      const refreshToken = getRefreshToken();
+      if (!token && !refreshToken) {
         setLoading(false);
         return;
       }
