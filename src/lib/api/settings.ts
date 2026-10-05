@@ -22,3 +22,26 @@ export const uploadCompanyFile = async (file: File) => {
   const response = await apiClient.post("/api/v1/settings/config/upload_company_file/", formData);
   return response.data;
 };
+
+export interface GmailAuthStatus {
+  connected: boolean;
+  email: string;
+  connected_at: string | null;
+  scope: string | null;
+}
+
+export const getGmailAuthStatus = async (): Promise<GmailAuthStatus> => {
+  const response = await apiClient.get("/api/v1/email/google/status/");
+  return response.data;
+};
+
+export const getGmailConnectUrl = async (): Promise<{ auth_url: string; state: string }> => {
+  const response = await apiClient.get("/api/v1/email/google/connect/?json=true");
+  return response.data;
+};
+
+export const sendGmailVerificationTest = async (payload?: { to?: string; subject?: string; body?: string }) => {
+  const response = await apiClient.post("/api/v1/email/google/test-send/", payload || {});
+  return response.data;
+};
+
