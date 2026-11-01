@@ -153,11 +153,26 @@ export default function TransmittalTab({
     });
   };
 
+  // Max 25 MB total raw attachment size (allows safe headroom under Gmail's 35 MB message limit)
+  const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
   // Add files handler
   const handleAddFiles = async (fileList: FileList) => {
+    let currentTotalBytes = customAttachments.reduce((acc, att) => {
+      return acc + (att.data ? Math.round((att.data.length * 3) / 4) : 0);
+    }, 0);
+
     const filesArray: AttachmentFile[] = [];
     for (let i = 0; i < fileList.length; i++) {
       const f = fileList[i];
+      if (f.size > MAX_ATTACHMENT_BYTES) {
+        showToast(`File "${f.name}" (${formatBytes(f.size)}) exceeds the 25 MB limit for email attachments.`, "error");
+        continue;
+      }
+      if (currentTotalBytes + f.size > MAX_ATTACHMENT_BYTES) {
+        showToast(`Adding "${f.name}" would exceed the 25 MB total attachment limit for transmittals.`, "error");
+        continue;
+      }
       try {
         const base64 = await readFileAsBase64(f);
         filesArray.push({
@@ -166,13 +181,16 @@ export default function TransmittalTab({
           type: f.type || "application/octet-stream",
           data: base64,
         });
+        currentTotalBytes += f.size;
       } catch (err) {
         console.error("Failed to read file", err);
-        filesArray.push({ name: f.name, size: formatBytes(f.size), type: f.type || "application/octet-stream" });
+        showToast(`Could not read file "${f.name}".`, "error");
       }
     }
-    setCustomAttachments(prev => [...prev, ...filesArray]);
-    showToast(`Attached ${filesArray.length} file(s)`, "success");
+    if (filesArray.length > 0) {
+      setCustomAttachments(prev => [...prev, ...filesArray]);
+      showToast(`Attached ${filesArray.length} file(s)`, "success");
+    }
   };
 
   // Drag handlers
@@ -645,6 +663,14 @@ Jasper Detailing Services`;
       return;
     }
 
+    const totalAttachmentBytes = customAttachments.reduce((acc, att) => {
+      return acc + (att.data ? Math.round((att.data.length * 3) / 4) : 0);
+    }, 0);
+    if (totalAttachmentBytes > 25 * 1024 * 1024) {
+      showToast(`Total attachments (${(totalAttachmentBytes / (1024 * 1024)).toFixed(1)} MB) exceed the 25 MB limit for transmittals.`, "error");
+      return;
+    }
+
     setSending(true);
     
     const targetContact = contacts.find(c => c.id.toString() === targetCompany);
@@ -670,7 +696,7 @@ Jasper Detailing Services`;
 
     try {
       const res = await apiClient.post(`/api/v1/projects/${projectId}/email/send/`, payload);
-      showToast("Transmittal email sent successfully via SMTP!", "success");
+      showToast("Transmittal email sent successfully!", "success");
       fetchHistory();
       
       if (res.data.newMailNumber) {
