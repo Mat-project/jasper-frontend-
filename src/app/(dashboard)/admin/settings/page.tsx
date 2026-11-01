@@ -1,26 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getSystemSettings, updateSystemSetting, createSystemSetting, uploadCompanyFile, getGmailAuthStatus, sendGmailVerificationTest, type GmailAuthStatus } from "@/lib/api/settings";
+import { getSystemSettings, updateSystemSetting, createSystemSetting, uploadCompanyFile } from "@/lib/api/settings";
 import { getAIUsageStats, type AIUsageStatsResponse } from "@/lib/api/aiUsage";
 import { getBaseUrl } from "@/lib/api/client";
-import { Settings, ShieldAlert, Users2, Save, CheckCircle, RefreshCw, Building2, UploadCloud, Sparkles, Cpu, AlertTriangle, ExternalLink, Mail, CheckCircle2, XCircle, Send, ShieldCheck } from "lucide-react";
+import { Settings, ShieldAlert, Users2, Save, CheckCircle, RefreshCw, Building2, UploadCloud, Sparkles, Cpu, AlertTriangle, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "company" | "ai" | "user" | "security" | "integrations">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "company" | "ai" | "user" | "security">("general");
   const [isSaved, setIsSaved] = useState(false);
-
-  // Gmail OAuth Integration State
-  const [gmailStatus, setGmailStatus] = useState<GmailAuthStatus | null>(null);
-  const [loadingGmailStatus, setLoadingGmailStatus] = useState(false);
-  const [connectingGmail, setConnectingGmail] = useState(false);
-  const [testRecipient, setTestRecipient] = useState("");
-  const [sendingTest, setSendingTest] = useState(false);
-  const [testSendResult, setTestSendResult] = useState<{ success: boolean; message: string; message_id?: string } | null>(null);
-  const [oauthBanner, setOauthBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // AI Usage State
   const [aiStats, setAiStats] = useState<AIUsageStatsResponse | null>(null);
@@ -113,95 +104,13 @@ export default function SettingsPage() {
     }
   };
 
-  const loadGmailAuth = async () => {
-    setLoadingGmailStatus(true);
-    try {
-      const data = await getGmailAuthStatus();
-      setGmailStatus(data);
-      if (data?.email && !testRecipient) {
-        setTestRecipient(data.email);
-      }
-    } catch (err) {
-      console.error("Failed to load Gmail OAuth status:", err);
-    } finally {
-      setLoadingGmailStatus(false);
-    }
-  };
-
-  const handleConnectGmail = async () => {
-    setConnectingGmail(true);
-    try {
-      const base = getBaseUrl();
-      window.location.href = `${base}/api/v1/email/google/connect/`;
-    } catch (err) {
-      console.error("Connect Gmail failed:", err);
-      setConnectingGmail(false);
-    }
-  };
-
-  const handleSendVerificationTest = async () => {
-    setSendingTest(true);
-    setTestSendResult(null);
-    try {
-      const res = await sendGmailVerificationTest({
-        to: testRecipient || undefined,
-        subject: "[EOMS Google Verification] Gmail API OAuth 2.0 Test Email",
-      });
-      setTestSendResult({
-        success: true,
-        message: res.message || "Verification test email dispatched successfully via Gmail API.",
-        message_id: res.message_id,
-      });
-    } catch (err: any) {
-      console.error("Test send failed:", err);
-      setTestSendResult({
-        success: false,
-        message: err.response?.data?.error || "Failed to dispatch verification email.",
-      });
-    } finally {
-      setSendingTest(false);
-    }
-  };
-
   useEffect(() => {
     loadSettings();
-    loadGmailAuth();
-
-    // Check URL query parameters for OAuth callback results
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get("tab");
-      const oauthResult = params.get("google_oauth");
-      const errorMsg = params.get("error_message");
-
-      if (tabParam === "integrations") {
-        setActiveTab("integrations");
-      }
-
-      if (oauthResult === "success") {
-        setActiveTab("integrations");
-        setOauthBanner({
-          type: "success",
-          message: "Google OAuth 2.0 authorization successful! Gmail integration is active and ready.",
-        });
-        loadGmailAuth();
-      } else if (oauthResult === "error") {
-        setActiveTab("integrations");
-        setOauthBanner({
-          type: "error",
-          message: errorMsg
-            ? `Google OAuth authorization failed: ${decodeURIComponent(errorMsg)}`
-            : "Google OAuth authorization was declined or encountered an error.",
-        });
-      }
-    }
   }, []);
 
   useEffect(() => {
     if (activeTab === "ai") {
       loadAiStats();
-    } else if (activeTab === "integrations") {
-      loadGmailAuth();
     }
   }, [activeTab]);
 
@@ -278,7 +187,6 @@ export default function SettingsPage() {
           {[
             { id: "general" as const, label: "General", icon: Settings },
             { id: "company" as const, label: "Company Profile", icon: Building2 },
-            { id: "integrations" as const, label: "Gmail Integration", icon: Mail },
             { id: "ai" as const, label: "AI & Spend Tracker", icon: Sparkles },
             { id: "user" as const, label: "Users", icon: Users2 },
             { id: "security" as const, label: "Security", icon: ShieldAlert },
@@ -302,26 +210,6 @@ export default function SettingsPage() {
         {/* Right Settings Form */}
         <div className="md:col-span-3">
           <form onSubmit={handleSave} className="bg-card border border-border rounded-xl p-6 space-y-6 shadow-sm">
-            {oauthBanner && (
-              <div
-                className={cn(
-                  "p-4 rounded-xl text-sm flex items-start gap-3 animate-fade-in",
-                  oauthBanner.type === "success"
-                    ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                    : "bg-rose-500/10 border border-rose-500/20 text-rose-400"
-                )}
-              >
-                {oauthBanner.type === "success" ? (
-                  <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
-                ) : (
-                  <XCircle className="h-5 w-5 shrink-0 text-rose-400" />
-                )}
-                <div className="flex-1">
-                  <p className="font-semibold">{oauthBanner.type === "success" ? "OAuth Authorization Verified" : "OAuth Authorization Error"}</p>
-                  <p className="text-xs mt-0.5 opacity-90">{oauthBanner.message}</p>
-                </div>
-              </div>
-            )}
 
             {isSaved && (
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-sm flex items-center gap-2 animate-fade-in">
@@ -623,174 +511,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* GMAIL OAUTH INTEGRATION */}
-            {activeTab === "integrations" && (
-              <div className="space-y-6 animate-fade-in">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-brand-500" />
-                      Gmail Authorization
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Authorize Google OAuth 2.0 to send engineering notifications and transmittals via official Gmail API.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={loadGmailAuth}
-                    disabled={loadingGmailStatus}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-foreground rounded-lg text-xs font-medium transition"
-                  >
-                    <RefreshCw className={cn("h-3.5 w-3.5", loadingGmailStatus && "animate-spin")} />
-                    Refresh Status
-                  </button>
-                </div>
-
-                {/* Account Status Card */}
-                <div className="p-5 rounded-xl border border-border bg-slate-500/5 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                        Account Type
-                      </span>
-                      <p className="text-sm font-bold text-foreground">Personal Gmail</p>
-                      <p className="text-xs text-muted-foreground font-mono">
-                        {gmailStatus?.email || "jasperalef1@gmail.com"}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                          Status
-                        </span>
-                        <div className="flex items-center gap-1.5 mt-0.5 justify-end">
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full",
-                              gmailStatus?.connected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "text-xs font-bold",
-                              gmailStatus?.connected
-                                ? "text-emerald-500"
-                                : "text-amber-500"
-                            )}
-                          >
-                            {gmailStatus?.connected ? "Connected" : "Not Connected"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleConnectGmail}
-                        disabled={connectingGmail}
-                        className={cn(
-                          "px-4 py-2 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-2",
-                          gmailStatus?.connected
-                            ? "bg-slate-700 hover:bg-slate-600 text-white"
-                            : "bg-brand-500 hover:bg-brand-600 text-white"
-                        )}
-                      >
-                        {connectingGmail ? (
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                        )}
-                        {gmailStatus?.connected ? "Re-authorize Gmail" : "Connect Gmail"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {gmailStatus?.connected && (
-                    <div className="pt-3 border-t border-border/60 text-[11px] text-muted-foreground flex flex-wrap gap-x-6 gap-y-1">
-                      <span>
-                        <strong className="text-foreground">Scope:</strong> {gmailStatus.scope || "https://www.googleapis.com/auth/gmail.send"}
-                      </span>
-                      {gmailStatus.connected_at && (
-                        <span>
-                          <strong className="text-foreground">Authorized At:</strong>{" "}
-                          {new Date(gmailStatus.connected_at).toLocaleString()}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Verification Test Send Section (Visible ONLY when Connected) */}
-                {gmailStatus?.connected && (
-                  <div className="p-5 rounded-xl border border-brand-500/20 bg-brand-500/5 space-y-4">
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <Send className="h-3.5 w-3.5 text-brand-500" />
-                        OAuth Verification Test Send
-                      </h4>
-                      <p className="text-xs text-muted-foreground">
-                        This test dispatches a verification email using the newly acquired Google OAuth 2.0 token to confirm <code className="text-brand-400">gmail.send</code> capability for Google review. It does NOT affect normal project transmittals.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                      <div className="sm:col-span-2 space-y-1.5">
-                        <label className="text-xs text-muted-foreground">Recipient Email Address</label>
-                        <input
-                          type="email"
-                          value={testRecipient}
-                          onChange={(e) => setTestRecipient(e.target.value)}
-                          placeholder="recipient@example.com"
-                          className="w-full px-3 py-2 rounded-lg bg-background border border-input text-xs text-foreground focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <button
-                          type="button"
-                          onClick={handleSendVerificationTest}
-                          disabled={sendingTest || !testRecipient}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-50"
-                        >
-                          {sendingTest ? (
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Send className="h-3.5 w-3.5" />
-                          )}
-                          Send Gmail Verification Test
-                        </button>
-                      </div>
-                    </div>
-
-                    {testSendResult && (
-                      <div
-                        className={cn(
-                          "p-3 rounded-lg text-xs flex items-start gap-2 animate-fade-in",
-                          testSendResult.success
-                            ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                            : "bg-rose-500/10 border border-rose-500/20 text-rose-400"
-                        )}
-                      >
-                        {testSendResult.success ? (
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                        ) : (
-                          <XCircle className="h-4 w-4 shrink-0 text-rose-400" />
-                        )}
-                        <div>
-                          <p className="font-semibold">{testSendResult.message}</p>
-                          {testSendResult.message_id && (
-                            <p className="font-mono text-[10px] mt-0.5 text-muted-foreground">
-                              Gmail Message ID: {testSendResult.message_id}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* AI & SPEND TRACKER */}
             {activeTab === "ai" && (
               <div className="space-y-6 animate-fade-in">
@@ -956,7 +676,7 @@ export default function SettingsPage() {
             )}
 
             {/* Save trigger (only for editable configuration tabs) */}
-            {activeTab !== "ai" && activeTab !== "integrations" && (
+            {activeTab !== "ai" && (
               <div className="flex justify-end pt-4 border-t border-border mt-6">
                 <button
                   type="submit"
