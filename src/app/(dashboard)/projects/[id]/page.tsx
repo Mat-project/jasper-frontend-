@@ -219,8 +219,8 @@ function ProjectDetailsContent({
   const tabs = [
     { id: "Extraction", label: "Upload & Extract" },
     { id: "Relationships", label: "Pending Relationships" },
-    { id: "Review", label: "Register Review" },
     { id: "Transmittals", label: "Email Transmittals" },
+    { id: "Review", label: "Register Review" },
     { id: "Revisions", label: "Revision History" }
   ] as const;
 

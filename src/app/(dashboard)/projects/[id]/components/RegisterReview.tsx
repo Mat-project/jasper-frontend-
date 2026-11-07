@@ -406,6 +406,24 @@ export default function RegisterReview({
     }
   };
 
+  const handleUnapproveRegister = async () => {
+    setApproving(true);
+    try {
+      const { default: apiClient, extractErrorMessage } = await import("@/lib/api/client");
+      const res = await apiClient.post(
+        `/api/v1/projects/${projectId}/registers/${register.id}/unapprove/`
+      );
+      setRegState(res.data);
+      onSaveSuccess?.();
+    } catch (err: any) {
+      console.error("Failed to reopen register", err);
+      const { extractErrorMessage } = await import("@/lib/api/client");
+      alert(extractErrorMessage(err, "Failed to reopen register. Please try again."));
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const scrollToFirstIssue = (type: "Error" | "Warning") => {
     const targetRow = editableRows.find((r) =>
       r.validation_exceptions?.some((e) =>
@@ -433,48 +451,23 @@ export default function RegisterReview({
         selectedSubmissionNo={submissions.find((s) => s.id === selectedSubmission)?.submission_no}
       />
 
-      {/* ── Approval / Draft Banner ── */}
-      {regState?.is_approved ? (
-        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-emerald-900">Document Register Formally Approved</span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-200 text-emerald-800 rounded-full">
-                  Ready for Transmittal
-                </span>
-              </div>
-              <p className="text-xs text-emerald-700 mt-0.5">
-                Signed off by{" "}
-                <span className="font-semibold">{regState.approved_by_name || "Checker / Manager"}</span>{" "}
-                on {regState.approved_at ? new Date(regState.approved_at).toLocaleString() : new Date().toLocaleDateString()}
-                {regState.approval_notes ? ` — "${regState.approval_notes}"` : ""}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-white/80 px-3 py-1.5 rounded-lg border border-emerald-200 shadow-xs">
-            <Award className="h-4 w-4 text-emerald-600" />
-            V{regState.version_number} Certified
-          </div>
-        </div>
-      ) : (
-        <div className="bg-amber-50/70 border border-amber-200/80 text-amber-900 px-4 py-3 rounded-xl flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-            <p className="text-xs text-amber-800">
-              <span className="font-semibold">Review in Progress:</span> Verify drawing numbers and BBS weights below. Formally sign off before client transmittal dispatch.
-            </p>
+      {/* ── Optional Verification Badge (Non-blocking) ── */}
+      {regState?.is_approved && (
+        <div className="bg-emerald-50/80 border border-emerald-200/80 text-emerald-900 px-4 py-2.5 rounded-xl flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>Data Verified</strong> by <span className="font-semibold">{regState.approved_by_name || "Checker / Manager"}</span> on {regState.approved_at ? new Date(regState.approved_at).toLocaleDateString() : "recent"}
+              {regState.approval_notes ? ` — "${regState.approval_notes}"` : ""}
+            </span>
           </div>
           {!isReadOnly && (
             <button
-              onClick={() => setShowApproveModal(true)}
-              className="text-xs font-bold text-amber-800 hover:text-amber-950 bg-amber-100 hover:bg-amber-200/80 px-3 py-1 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ml-4"
+              onClick={handleUnapproveRegister}
+              disabled={approving}
+              className="text-xs text-emerald-700 hover:text-emerald-900 underline font-medium cursor-pointer ml-3"
             >
-              <ShieldCheck className="h-3.5 w-3.5 text-amber-700" />
-              Sign Off
+              {approving ? "Updating..." : "Revert to Draft"}
             </button>
           )}
         </div>
@@ -539,14 +532,15 @@ export default function RegisterReview({
             </button>
           )}
 
-          {/* Approve Register */}
+          {/* Optional: Mark Verified */}
           {!isReadOnly && !regState?.is_approved && (
             <button
               onClick={() => setShowApproveModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              title="Optional quality check stamp"
             >
-              <ShieldCheck className="h-4 w-4 text-emerald-100" />
-              Approve
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              Mark Verified
             </button>
           )}
 
