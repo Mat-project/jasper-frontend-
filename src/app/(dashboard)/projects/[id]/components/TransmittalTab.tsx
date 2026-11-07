@@ -64,6 +64,8 @@ interface ZipPackage {
   submission_no: string;
   original_filename: string;
   heading?: string | null;
+  mail_number?: string | null;
+  lifecycle_status?: string | null;
   created_at: string;
 }
 
@@ -82,7 +84,7 @@ export default function TransmittalTab({
 
   // State
   const [targetCompany, setTargetCompany] = useState("");
-  const [senderAccount, setSenderAccount] = useState("domain");
+  const [senderAccount, setSenderAccount] = useState("personal_gmail");
   const [toField, setToField] = useState("");
   const [ccField, setCcField] = useState("");
   const [bccField, setBccField] = useState("");
@@ -133,6 +135,45 @@ export default function TransmittalTab({
 
   // Textarea Ref for formatting
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Email extraction & deduplication helper functions
+  const extractValidEmails = (raw: string): string[] => {
+    if (!raw) return [];
+    const regex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const matches = raw.match(regex) || [];
+    return matches.map((e) => e.trim().toLowerCase());
+  };
+
+  const deduplicateEmails = (raw: string, exclude: string[] = []): string => {
+    const list = extractValidEmails(raw);
+    const excludeSet = new Set(exclude.map((e) => e.trim().toLowerCase()));
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of list) {
+      if (!excludeSet.has(item) && !seen.has(item)) {
+        seen.add(item);
+        out.push(item);
+      }
+    }
+    return out.join(", ");
+  };
+
+  const cleanAllEmailFields = (toVal?: string, ccVal?: string, bccVal?: string) => {
+    const rawTo = toVal !== undefined ? toVal : toField;
+    const rawCc = ccVal !== undefined ? ccVal : ccField;
+    const rawBcc = bccVal !== undefined ? bccVal : bccField;
+
+    const cleanedTo = deduplicateEmails(rawTo, []);
+    const toList = extractValidEmails(cleanedTo);
+    const cleanedCc = deduplicateEmails(rawCc, toList);
+    const ccList = extractValidEmails(cleanedCc);
+    const cleanedBcc = deduplicateEmails(rawBcc, [...toList, ...ccList]);
+
+    setToField(cleanedTo);
+    setCcField(cleanedCc);
+    setBccField(cleanedBcc);
+    return { cleanTo: cleanedTo, cleanCc: cleanedCc, cleanBcc: cleanedBcc };
+  };
 
   // Format bytes helper
   const formatBytes = (bytes: number): string => {
@@ -336,8 +377,7 @@ export default function TransmittalTab({
             return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
           })
           .map((row: any) => {
-            const rev = row.drawing_rev ? ` (Rev ${row.drawing_rev})` : "";
-            return `${row.drawing_number}${rev}`;
+            return `${row.drawing_number}`;
           });
         
         setDrawings(extracted);
@@ -424,19 +464,17 @@ export default function TransmittalTab({
       drawingListText = "1. [No drawings found in this submission]";
     }
 
-    const bodyText = `Dear ${companyName} Team,
+    const bodyText = `Dear ${companyName},
 
 Please click the link below to download the following drawings.
 
-${heading}
+**${heading}**
 
 ${drawingListText}
 
 [Paste Link Here]
 
-Thanks & Regards,
-${project?.created_by?.first_name || 'Document Control'}
-Jasper Detailing Services`;
+Thanks & Regards,`;
 
     setBodyField(bodyText);
   }, [targetCompany, drawings, localMailNumber, contacts, project, submissions, selectedSubmission]);
@@ -628,15 +666,27 @@ Jasper Detailing Services`;
     }, 10);
   };
 
+  // Selected submission details and sent state
+  const selectedSubObj = submissions.find((s) => s.id === selectedSubmission);
+  const isSubmissionAlreadySent = Boolean(selectedSubObj?.mail_number);
+
   // Form submission
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isRegisterApproved) {
-      showToast("Document Register must be formally approved in Register Review before sending client transmittals.", "error");
+
+    if (isSubmissionAlreadySent) {
+      showToast(
+        `Transmittal has already been sent for submission '${selectedSubObj?.submission_no}' (Ref: ${selectedSubObj?.mail_number}). Duplicate sending is prohibited.`,
+        "error"
+      );
       return;
     }
-    if (!toField.trim() || !subjectField.trim() || !bodyField.trim()) {
-      showToast("Please fill in To, Subject, and Email Body fields.", "error");
+
+    // Auto-clean and cross-deduplicate recipient fields
+    const { cleanTo, cleanCc, cleanBcc } = cleanAllEmailFields();
+
+    if (!cleanTo.trim() || !subjectField.trim() || !bodyField.trim()) {
+      showToast("Please fill in valid To, Subject, and Email Body fields.", "error");
       return;
     }
 
@@ -685,9 +735,10 @@ Jasper Detailing Services`;
 
     const payload = {
       senderAccount: senderAccount,
-      to: toField,
-      cc: ccField,
-      bcc: bccField,
+      submissionId: selectedSubmission,
+      to: cleanTo,
+      cc: cleanCc,
+      bcc: cleanBcc,
       subject: subjectField,
       body: bodyField,
       companyName: targetContact ? targetContact.company_name : (project?.client || "Client"),
@@ -699,11 +750,24 @@ Jasper Detailing Services`;
       showToast("Transmittal email sent successfully!", "success");
       fetchHistory();
       
-      if (res.data.newMailNumber) {
-        setLocalMailNumber(res.data.newMailNumber);
+      const newRef = res.data.newMailNumber;
+      if (newRef) {
+        setLocalMailNumber(newRef);
         if (project) {
-          project.mail_number = res.data.newMailNumber;
+          project.mail_number = newRef;
         }
+      }
+
+      // Mark the current submission as sent locally
+      if (selectedSubmission) {
+        const stampedRef = newRef || "SENT";
+        setSubmissions((prev) =>
+          prev.map((s) =>
+            s.id === selectedSubmission
+              ? { ...s, mail_number: stampedRef, lifecycle_status: "Closed" }
+              : s
+          )
+        );
       }
       
       // Reset form controls
@@ -760,44 +824,44 @@ Jasper Detailing Services`;
             </div>
 
             <form onSubmit={handleSend} className="p-6 space-y-5">
-              {/* Approval Status Alert Banner */}
-              {!isRegisterApproved ? (
-                <div className="bg-amber-50 border border-amber-200/90 text-amber-900 p-4 rounded-xl flex items-center justify-between shadow-2xs">
+              {/* Submission Status Alert Banner */}
+              {isSubmissionAlreadySent ? (
+                <div className="bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded-xl flex items-center justify-between shadow-2xs">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-100 text-amber-700 rounded-lg shrink-0">
-                      <AlertTriangle className="h-5 w-5" />
+                    <div className="p-2 bg-blue-100 text-blue-700 rounded-lg shrink-0">
+                      <CheckCircle className="h-5 w-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm text-amber-900">
-                        Register Approval Required Before Client Dispatch
+                      <h4 className="font-bold text-sm text-blue-900">
+                        Transmittal Already Dispatched for this Submission
                       </h4>
-                      <p className="text-xs text-amber-700 mt-0.5">
-                        Document Register v{activeRegVersion} is currently in <span className="font-semibold">Draft</span> status. Formally sign off in Register Review before sending transmittal emails to clients.
+                      <p className="text-xs text-blue-700 mt-0.5">
+                        Submission Ref <span className="font-mono font-bold">{selectedSubObj?.submission_no}</span> was dispatched under Mail Ref <span className="font-mono font-bold">{selectedSubObj?.mail_number}</span>. Duplicate sending is prevented.
                       </p>
                     </div>
                   </div>
-                  {onGoToReview && (
-                    <button
-                      type="button"
-                      onClick={onGoToReview}
-                      className="text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300 px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ml-4"
-                    >
-                      <ShieldCheck className="h-4 w-4 text-amber-800" />
-                      Go to Register Review
-                    </button>
-                  )}
+                  <span className="px-2.5 py-1 text-xs font-bold bg-blue-200/80 text-blue-800 rounded-md border border-blue-300">
+                    Dispatched
+                  </span>
                 </div>
               ) : (
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-xl flex items-center justify-between shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <CheckCircle className="h-4.5 w-4.5 text-emerald-600 shrink-0" />
                     <p className="text-xs text-emerald-800 font-medium">
-                      <span className="font-bold text-emerald-900">Document Register v{activeRegVersion} Formally Approved</span> — Certified and ready for client dispatch.
+                      <span className="font-bold text-emerald-900">Fast-Track Transmittal Ready</span> — You can dispatch the client transmittal email immediately without waiting for register signoff.
                     </p>
                   </div>
-                  <span className="px-2.5 py-0.5 text-[10px] font-bold bg-emerald-200/80 text-emerald-800 rounded-full border border-emerald-300">
-                    Certified
-                  </span>
+                  {onGoToReview && (
+                    <button
+                      type="button"
+                      onClick={onGoToReview}
+                      className="text-xs font-semibold text-slate-600 bg-white hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 ml-4"
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5 text-slate-500" />
+                      Review / Edit Register
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -913,52 +977,76 @@ Jasper Detailing Services`;
                 </select>
               </div>
 
-              {/* To Recipient emails */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex justify-between items-center">
-                  <span>To <span className="text-rose-500">*</span></span>
-                  <span className="text-[10px] text-slate-400 font-normal">Separated by commas or semicolons</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. engineering@client.com, pm@client.com"
-                  value={toField}
-                  onChange={e => setToField(e.target.value)}
-                  required
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                />
-              </div>
-
-              {/* Cc and Bcc Recipient emails */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Cc Recipient emails */}
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex justify-between items-center">
-                    <span>Cc (Optional)</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Up to 50 total recipients</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="carbon copy emails (comma separated)"
-                    value={ccField}
-                    onChange={e => setCcField(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                  />
+              {/* Recipient inputs header & Auto-Clean Tool */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Recipients
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cleanAllEmailFields();
+                      showToast("Cleaned and deduplicated all recipient email addresses.", "info");
+                    }}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md border border-blue-200 transition flex items-center gap-1 cursor-pointer"
+                    title="Strip names/brackets (e.g. 'Name <email>') and remove duplicates across To, Cc, and Bcc"
+                  >
+                    ✨ Auto-Clean & Dedupe
+                  </button>
                 </div>
 
-                {/* Bcc Recipient emails */}
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex justify-between items-center">
-                    <span>Bcc (Optional)</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Blind carbon copy</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="blind copy emails (comma separated)"
-                    value={bccField}
-                    onChange={e => setBccField(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* To Recipient emails */}
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                      To <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="comma-separated emails (e.g. engineering@client.com)"
+                      value={toField}
+                      onChange={e => setToField(e.target.value)}
+                      onBlur={() => cleanAllEmailFields()}
+                      onPaste={() => setTimeout(() => cleanAllEmailFields(), 50)}
+                      required
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    />
+                  </div>
+
+                  {/* Cc Recipient emails */}
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Cc (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="carbon copy email addresses"
+                      value={ccField}
+                      onChange={e => setCcField(e.target.value)}
+                      onBlur={() => cleanAllEmailFields()}
+                      onPaste={() => setTimeout(() => cleanAllEmailFields(), 50)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    />
+                  </div>
+
+                  {/* Bcc Recipient emails */}
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Bcc (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="blind carbon copy email addresses"
+                      value={bccField}
+                      onChange={e => setBccField(e.target.value)}
+                      onBlur={() => cleanAllEmailFields()}
+                      onPaste={() => setTimeout(() => cleanAllEmailFields(), 50)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    />
+                  </div>
+                </div>
+              </div>
                 </div>
               </div>
 
@@ -1122,21 +1210,20 @@ Jasper Detailing Services`;
 
               {/* Send Button container */}
               <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                {!isRegisterApproved ? (
-                  <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    Approve register in Register Review to unlock client email dispatch
+                {isSubmissionAlreadySent ? (
+                  <p className="text-xs text-blue-700 font-medium flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    Transmittal already dispatched for this submission ({selectedSubObj?.mail_number})
                   </p>
                 ) : (
                   <div />
                 )}
                 <button
                   type="submit"
-                  disabled={sending || !isRegisterApproved}
-                  title={!isRegisterApproved ? "Approve register in Register Review tab to enable client dispatch" : undefined}
+                  disabled={sending || isSubmissionAlreadySent}
                   className={cn(
                     "px-5 py-2 font-medium rounded-lg text-sm shadow-sm transition flex items-center gap-2",
-                    !isRegisterApproved
+                    isSubmissionAlreadySent
                       ? "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300"
                       : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                   )}
@@ -1145,6 +1232,11 @@ Jasper Detailing Services`;
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Sending Notice...
+                    </>
+                  ) : isSubmissionAlreadySent ? (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Transmittal Sent
                     </>
                   ) : (
                     <>

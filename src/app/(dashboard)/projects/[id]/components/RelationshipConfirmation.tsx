@@ -13,6 +13,7 @@ import {
   FileText,
   Package,
   RefreshCw,
+  Send,
 } from "lucide-react";
 import {
   getRelationships,
@@ -754,18 +755,18 @@ export default function RelationshipConfirmation({
         )}
       </div>
 
-      {/* Generate Register CTA */}
+      {/* Fast-Track Send Transmittal CTA */}
       <div
         className={`border-t border-slate-200 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
           !allResolved ? "opacity-60" : ""
         }`}
       >
         <div>
-          <p className="text-sm font-semibold text-slate-700">Ready to generate the Register?</p>
+          <p className="text-sm font-semibold text-slate-700">Ready to dispatch Transmittal?</p>
           <p className="text-xs text-slate-400 mt-0.5">
             {pending.length > 0
-              ? `${pending.length} item(s) pending review. Confirm or reject to generate the Register.`
-              : "All relationships & standalone drawings have been reviewed. Click to compile the Register."}
+              ? `${pending.length} item(s) pending review. Confirm or reject to prepare transmittal.`
+              : "All drawing pairings reviewed. Click Send to compile the register and proceed directly to email dispatch."}
           </p>
         </div>
         <button
@@ -773,8 +774,8 @@ export default function RelationshipConfirmation({
           disabled={!allResolved || generating}
           className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-2"
         >
-          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-          {generating ? "Generating..." : "Generate Register"}
+          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {generating ? "Preparing..." : "Send"}
         </button>
       </div>
       </div>

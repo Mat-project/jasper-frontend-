@@ -339,7 +339,7 @@ function ProjectDetailsContent({
             projectId={project.id}
             onAllConfirmed={() => {
               fetchRegisterData();
-              handleTabChange("Review"); // Auto-switch to review when relationships confirmed
+              handleTabChange("Transmittals"); // Fast-track: Auto-switch directly to transmittal dispatch
             }}
           />
         )}
