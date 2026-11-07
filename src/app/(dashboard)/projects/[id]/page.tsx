@@ -13,7 +13,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
-import { cn } from "@/lib/utils";
+import { cn, cleanRecipientFields, cleanAndDedupeEmails } from "@/lib/utils";
 import AIRegisterTab from "./components/AIRegisterTab";
 import RevisionManagementTab from "./components/RevisionManagementTab";
 import RelationshipConfirmation from "./components/RelationshipConfirmation";
@@ -268,35 +268,24 @@ function ProjectDetailsContent({
           <div className="flex items-center gap-3">
 
             <button
-              disabled={!register}
               onClick={async () => {
-                if (!register) return;
                 try {
                   const { exportProjectRegister } = await import("@/lib/api/register_ai");
-                  const blob = await exportProjectRegister(id, register.id);
+                  const blob = await exportProjectRegister(id, register?.id);
                   const url = window.URL.createObjectURL(blob);
                   const a = window.document.createElement("a");
                   a.href = url;
-                  a.download = `${project.code}_register_V${register.version_number}.xlsx`;
+                  a.download = `${project.code}_register${register ? `_V${register.version_number}` : ""}.xlsx`;
                   window.document.body.appendChild(a);
                   a.click();
                   window.document.body.removeChild(a);
                   window.URL.revokeObjectURL(url);
                 } catch (e) {
                   console.error("Export failed", e);
+                  alert("Failed to export register. Please try again.");
                 }
               }}
-              title={
-                !register
-                  ? "No register available to export. Upload a ZIP package in 'Upload & Extract' to generate Register V1 first."
-                  : `Export Register V${register.version_number} to Excel`
-              }
-              className={cn(
-                "px-4 py-2 border rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
-                register
-                  ? "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-700 cursor-pointer"
-                  : "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-75"
-              )}
+              className="px-4 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
             >
               <FileSpreadsheet className="h-4 w-4" /> Export Register
             </button>
@@ -424,11 +413,20 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
 
   if (!isOpen) return null;
 
+  const handleAutoCleanEmails = () => {
+    const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(mailTo, mailCc, mailBcc);
+    setMailTo(cleanTo);
+    setMailCc(cleanCc);
+    setMailBcc(cleanBcc);
+    return { cleanTo, cleanCc, cleanBcc };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
+      const { cleanTo, cleanCc, cleanBcc } = handleAutoCleanEmails();
       const { default: apiClient } = await import("@/lib/api/client");
       const res = await apiClient.patch(`/api/v1/projects/${project.id}/`, {
         name,
@@ -438,9 +436,9 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
         priority,
         start_date: startDate || null,
         end_date: endDate || null,
-        mail_to: mailTo,
-        mail_cc: mailCc,
-        mail_bcc: mailBcc,
+        mail_to: cleanTo,
+        mail_cc: cleanCc,
+        mail_bcc: cleanBcc,
         mail_number: mailNumber
       });
       onSave(res.data);
@@ -560,6 +558,8 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 type="text"
                 value={mailTo}
                 onChange={(e) => setMailTo(e.target.value)}
+                onBlur={() => handleAutoCleanEmails()}
+                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
                 placeholder="e.g. client@company.com, lead@company.com"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -571,6 +571,8 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 type="text"
                 value={mailCc}
                 onChange={(e) => setMailCc(e.target.value)}
+                onBlur={() => handleAutoCleanEmails()}
+                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
                 placeholder="e.g. mathan@email.com, check@email.com"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -582,6 +584,8 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 type="text"
                 value={mailBcc}
                 onChange={(e) => setMailBcc(e.target.value)}
+                onBlur={() => handleAutoCleanEmails()}
+                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
                 placeholder="e.g. archive@jasper.ae"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />

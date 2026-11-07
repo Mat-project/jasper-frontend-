@@ -43,3 +43,45 @@ export function getInitials(name: string): string {
     .toUpperCase()
     .slice(0, 2);
 }
+
+/**
+ * Cleans a raw email recipient string:
+ * - Strips display names, angles, and brackets (e.g. "Name <user@domain.com>" -> "user@domain.com").
+ * - Supports comma, semicolon, space, or newline delimiters.
+ * - Deduplicates case-insensitively while preserving original order.
+ * - Filters out any addresses present in `excludeSet`.
+ */
+export function cleanAndDedupeEmails(raw: string, excludeSet?: Set<string>): string {
+  if (!raw || !raw.trim()) return "";
+  const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+  const matches = raw.match(emailRegex);
+  if (!matches) {
+    return raw.trim();
+  }
+
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const m of matches) {
+    const cleaned = m.trim().toLowerCase();
+    if (!seen.has(cleaned) && (!excludeSet || !excludeSet.has(cleaned))) {
+      seen.add(cleaned);
+      unique.push(cleaned);
+    }
+  }
+  return unique.join(", ");
+}
+
+/**
+ * Cross-cleans To, Cc, and Bcc fields so no duplicate email exists across the 3 lists.
+ */
+export function cleanRecipientFields(to: string, cc: string = "", bcc: string = "") {
+  const cleanTo = cleanAndDedupeEmails(to);
+  const toSet = new Set(cleanTo ? cleanTo.split(", ").map(e => e.trim().toLowerCase()) : []);
+
+  const cleanCc = cleanAndDedupeEmails(cc, toSet);
+  const toAndCcSet = new Set([...toSet, ...(cleanCc ? cleanCc.split(", ").map(e => e.trim().toLowerCase()) : [])]);
+
+  const cleanBcc = cleanAndDedupeEmails(bcc, toAndCcSet);
+
+  return { cleanTo, cleanCc, cleanBcc };
+}
