@@ -668,7 +668,7 @@ Thanks & Regards,`;
 
   // Selected submission details and sent state
   const selectedSubObj = submissions.find((s) => s.id === selectedSubmission);
-  const isSubmissionAlreadySent = Boolean(selectedSubObj?.mail_number);
+  const isSubmissionAlreadySent = selectedSubObj?.lifecycle_status === "Closed";
 
   // Form submission
   const handleSend = async (e: React.FormEvent) => {
@@ -676,7 +676,7 @@ Thanks & Regards,`;
 
     if (isSubmissionAlreadySent) {
       showToast(
-        `Transmittal has already been sent for submission '${selectedSubObj?.submission_no}' (Ref: ${selectedSubObj?.mail_number}). Duplicate sending is prohibited.`,
+        `Transmittal has already been sent for submission '${selectedSubObj?.submission_no}' (Ref: ${selectedSubObj?.mail_number || "Sent"}). Duplicate sending is prohibited.`,
         "error"
       );
       return;
@@ -1213,7 +1213,7 @@ Thanks & Regards,`;
                 {isSubmissionAlreadySent ? (
                   <p className="text-xs text-blue-700 font-medium flex items-center gap-1.5">
                     <CheckCircle className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    Transmittal already dispatched for this submission ({selectedSubObj?.mail_number})
+                    Transmittal already dispatched for this submission ({selectedSubObj?.mail_number || "Sent"})
                   </p>
                 ) : (
                   <div />
