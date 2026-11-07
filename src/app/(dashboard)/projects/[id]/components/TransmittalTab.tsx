@@ -1047,8 +1047,6 @@ Thanks & Regards,`;
                   </div>
                 </div>
               </div>
-                </div>
-              </div>
 
               {/* Subject line input */}
               <div>
