@@ -444,6 +444,10 @@ export default function TransmittalTab({
     if (targetCompany) {
       const contactData = contacts.find(c => c.id.toString() === targetCompany);
       if (contactData) {
+        // Use contact's emails for To, but keep project default CC/BCC
+        setToField(contactData.emails);
+        setCcField(project?.mail_cc || "");
+        setBccField(project?.mail_bcc || "");
         companyName = contactData.company_name;
       }
     }
@@ -601,19 +605,10 @@ Thanks & Regards,`;
   const handleCompanyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const contactId = e.target.value;
     setTargetCompany(contactId);
-    if (contactId) {
-      const contactData = contacts.find(c => c.id.toString() === contactId);
-      if (contactData) {
-        setToField(contactData.emails || "");
-        if (!ccField && project?.mail_cc) {
-          setCcField(project.mail_cc);
-        }
-        if (!bccField && project?.mail_bcc) {
-          setBccField(project.mail_bcc);
-        }
-      }
-    } else {
-      setToField(project?.mail_to || "");
+    if (!contactId) {
+      setToField("");
+      setSubjectField("");
+      setBodyField("");
     }
   };
 
@@ -668,7 +663,7 @@ Thanks & Regards,`;
 
   // Selected submission details and sent state
   const selectedSubObj = submissions.find((s) => s.id === selectedSubmission);
-  const isSubmissionAlreadySent = Boolean(selectedSubObj?.mail_number);
+  const isSubmissionAlreadySent = selectedSubObj?.lifecycle_status === "Closed";
 
   // Form submission
   const handleSend = async (e: React.FormEvent) => {
@@ -676,7 +671,7 @@ Thanks & Regards,`;
 
     if (isSubmissionAlreadySent) {
       showToast(
-        `Transmittal has already been sent for submission '${selectedSubObj?.submission_no}' (Ref: ${selectedSubObj?.mail_number}). Duplicate sending is prohibited.`,
+        `Transmittal has already been sent for submission '${selectedSubObj?.submission_no}' (Ref: ${selectedSubObj?.mail_number || "Sent"}). Duplicate sending is prohibited.`,
         "error"
       );
       return;
@@ -687,29 +682,6 @@ Thanks & Regards,`;
 
     if (!cleanTo.trim() || !subjectField.trim() || !bodyField.trim()) {
       showToast("Please fill in valid To, Subject, and Email Body fields.", "error");
-      return;
-    }
-
-    const splitEmails = (str: string) => str.split(/[,;\n]+/).map(e => e.trim()).filter(Boolean);
-    const toList = splitEmails(toField);
-    const ccList = splitEmails(ccField);
-    const bccList = splitEmails(bccField);
-    const totalRecipients = toList.length + ccList.length + bccList.length;
-
-    if (toList.length === 0) {
-      showToast("Please provide at least one valid recipient in the 'To' field.", "error");
-      return;
-    }
-
-    if (totalRecipients > 50) {
-      showToast(`Total recipients (To + Cc + Bcc) cannot exceed 50. Currently ${totalRecipients} entered.`, "error");
-      return;
-    }
-
-    const allEmails = [...toList, ...ccList, ...bccList];
-    const invalidEmail = allEmails.find(email => !email.includes("@"));
-    if (invalidEmail) {
-      showToast(`Invalid email format detected: "${invalidEmail}". Please check your recipient fields.`, "error");
       return;
     }
 
@@ -1211,7 +1183,7 @@ Thanks & Regards,`;
                 {isSubmissionAlreadySent ? (
                   <p className="text-xs text-blue-700 font-medium flex items-center gap-1.5">
                     <CheckCircle className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    Transmittal already dispatched for this submission ({selectedSubObj?.mail_number})
+                    Transmittal already dispatched for this submission ({selectedSubObj?.mail_number || "Sent"})
                   </p>
                 ) : (
                   <div />
