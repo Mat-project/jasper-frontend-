@@ -537,10 +537,13 @@ export default function EnterpriseProjectsPage() {
                       const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
                       setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
                     }}
-                    onPaste={() => setTimeout(() => {
-                      const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pasted = e.clipboardData.getData("text");
+                      const combined = addForm.mail_to ? `${addForm.mail_to}, ${pasted}` : pasted;
+                      const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(combined, addForm.mail_cc, addForm.mail_bcc);
                       setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
-                    }, 50)}
+                    }}
                     className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                     placeholder="e.g. client@company.com, lead@company.com"
                   />
@@ -556,10 +559,13 @@ export default function EnterpriseProjectsPage() {
                         const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
                         setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
                       }}
-                      onPaste={() => setTimeout(() => {
-                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pasted = e.clipboardData.getData("text");
+                        const combined = addForm.mail_cc ? `${addForm.mail_cc}, ${pasted}` : pasted;
+                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, combined, addForm.mail_bcc);
                         setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
-                      }, 50)}
+                      }}
                       className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                       placeholder="e.g. pm@jasper.ae"
                     />
@@ -574,10 +580,13 @@ export default function EnterpriseProjectsPage() {
                         const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
                         setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
                       }}
-                      onPaste={() => setTimeout(() => {
-                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pasted = e.clipboardData.getData("text");
+                        const combined = addForm.mail_bcc ? `${addForm.mail_bcc}, ${pasted}` : pasted;
+                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, combined);
                         setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
-                      }, 50)}
+                      }}
                       className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                       placeholder="e.g. archive@jasper.ae"
                     />
