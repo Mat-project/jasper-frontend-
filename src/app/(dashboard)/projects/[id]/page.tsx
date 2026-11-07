@@ -559,7 +559,15 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 value={mailTo}
                 onChange={(e) => setMailTo(e.target.value)}
                 onBlur={() => handleAutoCleanEmails()}
-                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pasted = e.clipboardData.getData("text");
+                  const combined = mailTo ? `${mailTo}, ${pasted}` : pasted;
+                  const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(combined, mailCc, mailBcc);
+                  setMailTo(cleanTo);
+                  setMailCc(cleanCc);
+                  setMailBcc(cleanBcc);
+                }}
                 placeholder="e.g. client@company.com, lead@company.com"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -572,7 +580,15 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 value={mailCc}
                 onChange={(e) => setMailCc(e.target.value)}
                 onBlur={() => handleAutoCleanEmails()}
-                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pasted = e.clipboardData.getData("text");
+                  const combined = mailCc ? `${mailCc}, ${pasted}` : pasted;
+                  const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(mailTo, combined, mailBcc);
+                  setMailTo(cleanTo);
+                  setMailCc(cleanCc);
+                  setMailBcc(cleanBcc);
+                }}
                 placeholder="e.g. mathan@email.com, check@email.com"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -585,7 +601,15 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 value={mailBcc}
                 onChange={(e) => setMailBcc(e.target.value)}
                 onBlur={() => handleAutoCleanEmails()}
-                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pasted = e.clipboardData.getData("text");
+                  const combined = mailBcc ? `${mailBcc}, ${pasted}` : pasted;
+                  const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(mailTo, mailCc, combined);
+                  setMailTo(cleanTo);
+                  setMailCc(cleanCc);
+                  setMailBcc(cleanBcc);
+                }}
                 placeholder="e.g. archive@jasper.ae"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />

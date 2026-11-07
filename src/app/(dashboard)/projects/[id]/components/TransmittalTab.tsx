@@ -66,6 +66,7 @@ interface ZipPackage {
   heading?: string | null;
   mail_number?: string | null;
   lifecycle_status?: string | null;
+  is_dispatched?: boolean;
   created_at: string;
 }
 
@@ -665,7 +666,7 @@ Thanks & Regards,`;
 
   // Selected submission details and sent state
   const selectedSubObj = submissions.find((s) => s.id === selectedSubmission);
-  const isSubmissionAlreadySent = selectedSubObj?.lifecycle_status === "Closed";
+  const isSubmissionAlreadySent = Boolean(selectedSubObj?.is_dispatched) || selectedSubObj?.lifecycle_status === "Closed";
 
   // Form submission
   const handleSend = async (e: React.FormEvent) => {
@@ -738,7 +739,7 @@ Thanks & Regards,`;
         setSubmissions((prev) =>
           prev.map((s) =>
             s.id === selectedSubmission
-              ? { ...s, mail_number: stampedRef, lifecycle_status: "Closed" }
+              ? { ...s, mail_number: stampedRef, lifecycle_status: "Closed", is_dispatched: true }
               : s
           )
         );
@@ -915,7 +916,12 @@ Thanks & Regards,`;
                         value={newContactEmails}
                         onChange={e => setNewContactEmails(e.target.value)}
                         onBlur={() => setNewContactEmails(prev => deduplicateEmails(prev, []))}
-                        onPaste={() => setTimeout(() => setNewContactEmails(prev => deduplicateEmails(prev, [])), 50)}
+                        onPaste={(e) => {
+                          e.preventDefault();
+                          const pasted = e.clipboardData.getData("text");
+                          const combined = newContactEmails ? `${newContactEmails}, ${pasted}` : pasted;
+                          setNewContactEmails(deduplicateEmails(combined, []));
+                        }}
                         className="text-sm px-3 py-2 border border-blue-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                       />
                     </div>
@@ -984,7 +990,14 @@ Thanks & Regards,`;
                       value={toField}
                       onChange={e => setToField(e.target.value)}
                       onBlur={() => cleanAllEmailFields()}
-                      onPaste={() => setTimeout(() => cleanAllEmailFields(), 50)}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pasted = e.clipboardData.getData("text");
+                        const combined = toField ? `${toField}, ${pasted}` : pasted;
+                        const cleaned = deduplicateEmails(combined, []);
+                        setToField(cleaned);
+                        setTimeout(() => cleanAllEmailFields(cleaned, ccField, bccField), 0);
+                      }}
                       required
                       className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                     />
@@ -1001,7 +1014,15 @@ Thanks & Regards,`;
                       value={ccField}
                       onChange={e => setCcField(e.target.value)}
                       onBlur={() => cleanAllEmailFields()}
-                      onPaste={() => setTimeout(() => cleanAllEmailFields(), 50)}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pasted = e.clipboardData.getData("text");
+                        const combined = ccField ? `${ccField}, ${pasted}` : pasted;
+                        const toList = extractValidEmails(toField);
+                        const cleaned = deduplicateEmails(combined, toList);
+                        setCcField(cleaned);
+                        setTimeout(() => cleanAllEmailFields(toField, cleaned, bccField), 0);
+                      }}
                       className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                     />
                   </div>
@@ -1017,7 +1038,15 @@ Thanks & Regards,`;
                       value={bccField}
                       onChange={e => setBccField(e.target.value)}
                       onBlur={() => cleanAllEmailFields()}
-                      onPaste={() => setTimeout(() => cleanAllEmailFields(), 50)}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pasted = e.clipboardData.getData("text");
+                        const combined = bccField ? `${bccField}, ${pasted}` : pasted;
+                        const toAndCcList = [...extractValidEmails(toField), ...extractValidEmails(ccField)];
+                        const cleaned = deduplicateEmails(combined, toAndCcList);
+                        setBccField(cleaned);
+                        setTimeout(() => cleanAllEmailFields(toField, ccField, cleaned), 0);
+                      }}
                       className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                     />
                   </div>
