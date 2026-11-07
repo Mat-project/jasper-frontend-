@@ -11,7 +11,6 @@ import {
   Trash2,
   Save,
   Check,
-  Download,
   ShieldCheck,
   Award,
   X,
@@ -544,14 +543,6 @@ export default function RegisterReview({
             </button>
           )}
 
-          {/* Download CSV */}
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all cursor-pointer"
-          >
-            <Download className="h-4 w-4 text-emerald-50" />
-            Download CSV
-          </button>
 
           {/* More dropdown */}
           {!isReadOnly && (
