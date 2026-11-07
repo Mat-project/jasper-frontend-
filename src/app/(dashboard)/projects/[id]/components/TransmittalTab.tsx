@@ -575,7 +575,9 @@ Thanks & Regards,`;
 
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newContactName.trim() || !newContactEmails.trim()) {
+    const cleanedEmails = deduplicateEmails(newContactEmails, []);
+    if (!newContactName.trim() || !cleanedEmails.trim()) {
+      showToast("Please enter a valid company name and at least one valid email address.", "error");
       return;
     }
     setAddingContact(true);
@@ -583,7 +585,7 @@ Thanks & Regards,`;
       const res = await apiClient.post(`/api/v1/projects/contacts/`, {
         project: projectId,
         company_name: newContactName,
-        emails: newContactEmails
+        emails: cleanedEmails
       });
       setContacts([...contacts, res.data]);
       setShowAddContact(false);
@@ -940,6 +942,8 @@ Thanks & Regards,`;
                         placeholder="Emails (comma separated)" 
                         value={newContactEmails}
                         onChange={e => setNewContactEmails(e.target.value)}
+                        onBlur={() => setNewContactEmails(prev => deduplicateEmails(prev, []))}
+                        onPaste={() => setTimeout(() => setNewContactEmails(prev => deduplicateEmails(prev, [])), 50)}
                         className="text-sm px-3 py-2 border border-blue-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                       />
                     </div>

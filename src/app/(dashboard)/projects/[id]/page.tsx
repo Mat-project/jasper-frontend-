@@ -13,7 +13,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { getProjects } from "@/lib/api/projects";
-import { cn } from "@/lib/utils";
+import { cn, cleanRecipientFields, cleanAndDedupeEmails } from "@/lib/utils";
 import AIRegisterTab from "./components/AIRegisterTab";
 import RevisionManagementTab from "./components/RevisionManagementTab";
 import RelationshipConfirmation from "./components/RelationshipConfirmation";
@@ -424,11 +424,20 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
 
   if (!isOpen) return null;
 
+  const handleAutoCleanEmails = () => {
+    const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(mailTo, mailCc, mailBcc);
+    setMailTo(cleanTo);
+    setMailCc(cleanCc);
+    setMailBcc(cleanBcc);
+    return { cleanTo, cleanCc, cleanBcc };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
+      const { cleanTo, cleanCc, cleanBcc } = handleAutoCleanEmails();
       const { default: apiClient } = await import("@/lib/api/client");
       const res = await apiClient.patch(`/api/v1/projects/${project.id}/`, {
         name,
@@ -438,9 +447,9 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
         priority,
         start_date: startDate || null,
         end_date: endDate || null,
-        mail_to: mailTo,
-        mail_cc: mailCc,
-        mail_bcc: mailBcc,
+        mail_to: cleanTo,
+        mail_cc: cleanCc,
+        mail_bcc: cleanBcc,
         mail_number: mailNumber
       });
       onSave(res.data);
@@ -560,6 +569,8 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 type="text"
                 value={mailTo}
                 onChange={(e) => setMailTo(e.target.value)}
+                onBlur={() => handleAutoCleanEmails()}
+                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
                 placeholder="e.g. client@company.com, lead@company.com"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -571,6 +582,8 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 type="text"
                 value={mailCc}
                 onChange={(e) => setMailCc(e.target.value)}
+                onBlur={() => handleAutoCleanEmails()}
+                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
                 placeholder="e.g. mathan@email.com, check@email.com"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />
@@ -582,6 +595,8 @@ function EditProjectModal({ project, isOpen, onClose, onSave }: EditProjectModal
                 type="text"
                 value={mailBcc}
                 onChange={(e) => setMailBcc(e.target.value)}
+                onBlur={() => handleAutoCleanEmails()}
+                onPaste={() => setTimeout(() => handleAutoCleanEmails(), 50)}
                 placeholder="e.g. archive@jasper.ae"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               />

@@ -23,7 +23,7 @@ import {
 import { useRouter } from "next/navigation";
 import { getProjects, createProject, deleteProject, EnterpriseProject } from "@/lib/api/projects";
 import { exportMonthlyRegister } from "@/lib/api/register_ai";
-import { cn } from "@/lib/utils";
+import { cn, cleanRecipientFields } from "@/lib/utils";
 
 /** Safely formats any backend API error response into a clean, human-readable user message. */
 function formatUserFriendlyError(error: unknown): string {
@@ -191,8 +191,16 @@ export default function EnterpriseProjectsPage() {
     setIsSaving(true);
     setModalError(null);
     try {
+      const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(
+        addForm.mail_to,
+        addForm.mail_cc,
+        addForm.mail_bcc
+      );
       const newProj = await createProject({
         ...addForm,
+        mail_to: cleanTo,
+        mail_cc: cleanCc,
+        mail_bcc: cleanBcc,
         status: "Planned",
       });
       setProjects([newProj, ...projects]);
@@ -525,6 +533,14 @@ export default function EnterpriseProjectsPage() {
                     type="text"
                     value={addForm.mail_to}
                     onChange={(e) => setAddForm({ ...addForm, mail_to: e.target.value })}
+                    onBlur={() => {
+                      const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                      setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
+                    }}
+                    onPaste={() => setTimeout(() => {
+                      const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                      setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
+                    }, 50)}
                     className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                     placeholder="e.g. client@company.com, lead@company.com"
                   />
@@ -536,6 +552,14 @@ export default function EnterpriseProjectsPage() {
                       type="text"
                       value={addForm.mail_cc}
                       onChange={(e) => setAddForm({ ...addForm, mail_cc: e.target.value })}
+                      onBlur={() => {
+                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                        setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
+                      }}
+                      onPaste={() => setTimeout(() => {
+                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                        setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
+                      }, 50)}
                       className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                       placeholder="e.g. pm@jasper.ae"
                     />
@@ -546,6 +570,14 @@ export default function EnterpriseProjectsPage() {
                       type="text"
                       value={addForm.mail_bcc}
                       onChange={(e) => setAddForm({ ...addForm, mail_bcc: e.target.value })}
+                      onBlur={() => {
+                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                        setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
+                      }}
+                      onPaste={() => setTimeout(() => {
+                        const { cleanTo, cleanCc, cleanBcc } = cleanRecipientFields(addForm.mail_to, addForm.mail_cc, addForm.mail_bcc);
+                        setAddForm(prev => ({ ...prev, mail_to: cleanTo, mail_cc: cleanCc, mail_bcc: cleanBcc }));
+                      }, 50)}
                       className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                       placeholder="e.g. archive@jasper.ae"
                     />
