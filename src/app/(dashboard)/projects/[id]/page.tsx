@@ -220,8 +220,8 @@ function ProjectDetailsContent({
     { id: "Extraction", label: "Upload & Extract" },
     { id: "Relationships", label: "Pending Relationships" },
     { id: "Review", label: "Register Review" },
-    { id: "Revisions", label: "Revision History" },
-    { id: "Transmittals", label: "Email Transmittals" }
+    { id: "Transmittals", label: "Email Transmittals" },
+    { id: "Revisions", label: "Revision History" }
   ] as const;
 
   return (
