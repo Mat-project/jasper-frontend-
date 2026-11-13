@@ -137,6 +137,9 @@ export function NotificationToaster() {
   }, []);
 
   const poll = useCallback(async () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
     try {
       const data = await getAllNotifications();
       const seen = seenRef.current;
@@ -189,13 +192,34 @@ export function NotificationToaster() {
     }
   }, [currentProjectId, dismissToast]);
 
+  // Sequentially poll for toast events every 10 seconds.
+  // Automatically pauses when tab is hidden, resumes immediately when tab becomes visible.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    let isCancelled = false;
+
+    const runPoll = async () => {
+      if (isCancelled) return;
+      await poll();
+      if (!isCancelled) {
+        timer = setTimeout(runPoll, 10000);
+      }
+    };
+
     // Initial poll after a short delay to let the page settle
-    const initial = setTimeout(poll, 1500);
-    const interval = setInterval(poll, 10000);
+    timer = setTimeout(runPoll, 1500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        poll();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
-      clearTimeout(initial);
-      clearInterval(interval);
+      isCancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [poll]);
 
