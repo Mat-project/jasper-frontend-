@@ -11,6 +11,12 @@
 import axios, { AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
 import Cookies from "js-cookie";
 
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    skipDiagnostic?: boolean;
+  }
+}
+
 const TOKEN_KEY = "eoms_access";
 const REFRESH_KEY = "eoms_refresh";
 
@@ -152,6 +158,7 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = (error.config || {}) as AxiosRequestConfig & {
       _retry?: boolean;
+      skipDiagnostic?: boolean;
     };
     const requestUrl = originalRequest.url || "";
     const isAuthEndpoint = requestUrl.includes("/auth/login") || requestUrl.includes("/token") || requestUrl.includes("/login");
@@ -162,7 +169,8 @@ apiClient.interceptors.response.use(
       // Only show diagnostic modal for 5xx server errors and network errors (status 0).
       // 4xx errors (400 validation, 404 not found, 409 conflict, etc.) are handled
       // inline by individual components with user-friendly messages.
-      const shouldShowDiagnostic = !isAuthEndpoint && (status === 0 || status >= 500);
+      // Background and non-critical polling requests can opt out via skipDiagnostic: true.
+      const shouldShowDiagnostic = !originalRequest.skipDiagnostic && !isAuthEndpoint && (status === 0 || status >= 500);
       if (shouldShowDiagnostic) {
         dispatchApiError({
           title: error.response?.statusText || (status ? `HTTP ${status} Error` : "API Connection Failed"),

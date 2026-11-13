@@ -173,6 +173,9 @@ export function NotificationCenter() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchCount = useCallback(async () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
     try {
       const count = await getUnreadNotificationCount();
       setUnreadCount(count);
@@ -184,7 +187,7 @@ export function NotificationCenter() {
   const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getAllNotifications();
+      const data = await getAllNotifications({}, { skipDiagnostic: false, timeout: 15000 });
       setNotifications(data);
     } catch (e) {
       console.error("Failed to fetch notifications:", e);
@@ -193,11 +196,34 @@ export function NotificationCenter() {
     }
   }, []);
 
-  // Poll the unread count every 15 seconds — cheap and keeps the badge live.
+  // Poll the unread count every 15 seconds sequentially — cheap and keeps the badge live.
+  // Automatically pauses when tab is hidden, resumes immediately when tab becomes visible.
   useEffect(() => {
-    fetchCount();
-    const interval = setInterval(fetchCount, 15000);
-    return () => clearInterval(interval);
+    let timer: ReturnType<typeof setTimeout>;
+    let isCancelled = false;
+
+    const runPoll = async () => {
+      if (isCancelled) return;
+      await fetchCount();
+      if (!isCancelled) {
+        timer = setTimeout(runPoll, 15000);
+      }
+    };
+
+    runPoll();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchCount();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fetchCount]);
 
   // Refresh the list + count whenever the dropdown is opened.

@@ -348,11 +348,22 @@ export async function markNotificationRead(
 
 const NOTIF_BASE = "/api/v1/register_ai/notifications";
 
+/** Options for background notification polling */
+export interface NotificationPollOptions {
+  skipDiagnostic?: boolean;
+  timeout?: number;
+}
+
 /** Fetch all notifications for the current user (optionally filtered by project) */
 export async function getAllNotifications(
-  params: Record<string, any> = {}
+  params: Record<string, any> = {},
+  options: NotificationPollOptions = { skipDiagnostic: true, timeout: 8000 }
 ): Promise<RegisterNotification[]> {
-  const res = await apiClient.get<any>(`${NOTIF_BASE}/`, { params });
+  const res = await apiClient.get<any>(`${NOTIF_BASE}/`, {
+    params,
+    skipDiagnostic: options.skipDiagnostic ?? true,
+    timeout: options.timeout ?? 8000,
+  });
   if (res.data && typeof res.data === 'object' && 'results' in res.data) {
     return res.data.results;
   }
@@ -361,9 +372,14 @@ export async function getAllNotifications(
 
 /** Fetch unread notifications for the current user */
 export async function getUnreadNotifications(
-  params: Record<string, any> = {}
+  params: Record<string, any> = {},
+  options: NotificationPollOptions = { skipDiagnostic: true, timeout: 8000 }
 ): Promise<RegisterNotification[]> {
-  const res = await apiClient.get<any>(`${NOTIF_BASE}/unread/`, { params });
+  const res = await apiClient.get<any>(`${NOTIF_BASE}/unread/`, {
+    params,
+    skipDiagnostic: options.skipDiagnostic ?? true,
+    timeout: options.timeout ?? 8000,
+  });
   if (res.data && typeof res.data === 'object' && 'results' in res.data) {
     return res.data.results;
   }
@@ -371,8 +387,13 @@ export async function getUnreadNotifications(
 }
 
 /** Get the unread notification count for the current user */
-export async function getUnreadNotificationCount(): Promise<number> {
-  const res = await apiClient.get<{ count: number }>(`${NOTIF_BASE}/count/`);
+export async function getUnreadNotificationCount(
+  options: NotificationPollOptions = { skipDiagnostic: true, timeout: 8000 }
+): Promise<number> {
+  const res = await apiClient.get<{ count: number }>(`${NOTIF_BASE}/count/`, {
+    skipDiagnostic: options.skipDiagnostic ?? true,
+    timeout: options.timeout ?? 8000,
+  });
   return res.data.count;
 }
 

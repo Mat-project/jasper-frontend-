@@ -60,7 +60,21 @@ export function DiagnosticErrorModal() {
     if (!SHOW_DIAGNOSTIC_ERROR_MODAL) return;
     const customEvent = e as CustomEvent<ApiErrorDetail>;
     if (customEvent.detail) {
-      setErrors((prev) => [customEvent.detail, ...prev].slice(0, 5)); // Keep last 5 errors max
+      setErrors((prev) => {
+        // Deduplicate repeated errors for the same endpoint and method
+        const exists = prev.some(
+          (err) => err.url === customEvent.detail.url && err.method === customEvent.detail.method
+        );
+        if (exists) {
+          return [
+            customEvent.detail,
+            ...prev.filter(
+              (err) => !(err.url === customEvent.detail.url && err.method === customEvent.detail.method)
+            ),
+          ].slice(0, 5);
+        }
+        return [customEvent.detail, ...prev].slice(0, 5);
+      });
     }
   }, []);
 
@@ -73,6 +87,10 @@ export function DiagnosticErrorModal() {
 
   const dismissError = (id: string) => {
     setErrors((prev) => prev.filter((err) => err.id !== id));
+  };
+
+  const dismissAll = () => {
+    setErrors([]);
   };
 
   const copyErrorDetails = (err: ApiErrorDetail) => {
@@ -191,9 +209,17 @@ export function DiagnosticErrorModal() {
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-900/80 border-t border-border">
           <div className="text-xs text-muted-foreground">
             {errors.length > 1 && (
-              <span className="font-semibold text-rose-600 dark:text-rose-400">
-                + {errors.length - 1} more error(s) queued
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-rose-600 dark:text-rose-400">
+                  + {errors.length - 1} more error(s) queued
+                </span>
+                <button
+                  onClick={dismissAll}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline ml-1"
+                >
+                  Dismiss All
+                </button>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-3">
