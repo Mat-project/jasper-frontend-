@@ -29,6 +29,7 @@ import {
   FileIcon,
 } from "lucide-react";
 import apiClient, { extractErrorMessage } from "@/lib/api/client";
+import { getRegisterRows } from "@/lib/api/register_ai";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
 import { cn } from "@/lib/utils";
@@ -358,20 +359,20 @@ export default function TransmittalTab({
         setActiveRegVersion(activeReg.version_number.toString());
         setIsRegisterApproved(activeReg.is_approved === true);
         
-        // Get rows for this register
-        const rowsRes = await apiClient.get(`/api/v1/projects/${projectId}/registers/${activeReg.id}/rows/`);
-        let allRows = rowsRes.data;
-        if (allRows && typeof allRows === 'object' && 'results' in allRows) {
-          allRows = allRows.results;
-        }
-        const rowsArray = Array.isArray(allRows) ? allRows : [];
+        // Get all rows for this register (ensures no 20-row pagination cutoff)
+        const rowsArray = await getRegisterRows(projectId, activeReg.id);
         setRegisterRows(rowsArray);
         
         // Extract drawing numbers in order, filtered by the selected submission
         // (ZipPackage), sorted by drawing_number ascending so they appear in
         // proper sequential order (e.g. B5-025, B5-026, B5-027, ...).
         const extracted = rowsArray
-          .filter((row: any) => row.drawing_number && row.zip_package === selectedSubmission)
+          .filter((row: any) => {
+            const rowPkg = typeof row.zip_package === "object" && row.zip_package !== null 
+              ? row.zip_package.id 
+              : row.zip_package;
+            return row.drawing_number && String(rowPkg || "") === String(selectedSubmission);
+          })
           .sort((a: any, b: any) => {
             const aNum = a.drawing_number || "";
             const bNum = b.drawing_number || "";
