@@ -838,7 +838,7 @@ export default function RegisterReview({
           <div className="col-span-2">Drawing No.</div>
           <div className="col-span-4">Drawing Title</div>
           <div className="col-span-2">BBS Reference</div>
-          <div className="col-span-1 text-right">Weight (kg)</div>
+          <div className="col-span-1 text-right">Weight (T)</div>
           <div className="col-span-1 text-center">Issues</div>
           <div className="col-span-1 text-center">Details</div>
         </div>

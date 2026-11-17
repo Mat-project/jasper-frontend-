@@ -503,7 +503,7 @@ Thanks & Regards,`;
       "Drawing Number",
       "Drawing Title",
       "BBS Number",
-      "Total Weight (kg)",
+      "Total Weight (T)",
       "Sheet No",
       "Drawing Rev",
       "BBS Rev",
