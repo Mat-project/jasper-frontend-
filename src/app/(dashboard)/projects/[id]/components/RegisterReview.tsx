@@ -300,6 +300,36 @@ export default function RegisterReview({
     setEditableRows((prev) => prev.filter((r) => r.id !== rowId));
   };
 
+  const handleRenumberSheets = () => {
+    const targetRows = selectedSubmission
+      ? editableRows.filter((r) => r.zip_package === selectedSubmission)
+      : editableRows;
+
+    if (targetRows.length === 0) return;
+
+    const sorted = [...targetRows].sort((a, b) =>
+      (a.drawing_number || "").localeCompare(b.drawing_number || "", undefined, {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+
+    const total = sorted.length;
+    const renumberMap = new Map<string, string>();
+    sorted.forEach((r, idx) => {
+      renumberMap.set(
+        r.id,
+        `${String(idx + 1).padStart(2, "0")} OF ${String(total).padStart(2, "0")}`
+      );
+    });
+
+    setEditableRows((prev) =>
+      prev.map((r) =>
+        renumberMap.has(r.id) ? { ...r, sheet_no: renumberMap.get(r.id)! } : r
+      )
+    );
+  };
+
   const handleSaveChanges = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
@@ -543,6 +573,17 @@ export default function RegisterReview({
             </button>
           )}
 
+          {/* Sequential Sheet Renumbering Action */}
+          {!isReadOnly && editableRows.length > 0 && (
+            <button
+              onClick={handleRenumberSheets}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              title="Sequentially renumber sheet numbers (e.g. 01 OF 13, 02 OF 13...)"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
+              Renumber Sheets
+            </button>
+          )}
 
           {/* More dropdown */}
           {!isReadOnly && (
@@ -562,6 +603,13 @@ export default function RegisterReview({
                   >
                     <Plus className="h-4 w-4 text-blue-600" />
                     Add Row
+                  </button>
+                  <button
+                    onClick={() => { handleRenumberSheets(); setShowMoreMenu(false); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 text-left transition-colors"
+                  >
+                    <RotateCcw className="h-4 w-4 text-slate-500" />
+                    Renumber Sheets
                   </button>
                   <button
                     onClick={() => { onUploadNew(); setShowMoreMenu(false); }}
