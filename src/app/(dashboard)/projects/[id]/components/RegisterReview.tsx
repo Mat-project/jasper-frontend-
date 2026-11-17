@@ -191,8 +191,21 @@ export default function RegisterReview({
 
   // visibleRows: filter by submission, then by search query, sorted by drawing_number
   const baseRows = selectedSubmission
-    ? editableRows.filter((r) => r.zip_package === selectedSubmission)
+    ? editableRows.filter((r) => {
+        const rowPkg = typeof r.zip_package === "object" && r.zip_package !== null 
+          ? (r.zip_package as any).id 
+          : r.zip_package;
+        return String(rowPkg || "") === String(selectedSubmission);
+      })
     : editableRows;
+
+  const submissionOrderMap = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    submissions.forEach((sub) => {
+      map[sub.id] = sub.created_at ? new Date(sub.created_at).getTime() : 0;
+    });
+    return map;
+  }, [submissions]);
 
   const visibleRows = baseRows
     .filter((r) => {
@@ -206,6 +219,23 @@ export default function RegisterReview({
     })
     .slice()
     .sort((a, b) => {
+      // 1. Submission recency: newest submission at top
+      const aPkgId = typeof a.zip_package === "object" && a.zip_package ? (a.zip_package as any).id : a.zip_package;
+      const bPkgId = typeof b.zip_package === "object" && b.zip_package ? (b.zip_package as any).id : b.zip_package;
+      const aTime = submissionOrderMap[String(aPkgId)] ?? 0;
+      const bTime = submissionOrderMap[String(bPkgId)] ?? 0;
+      if (aTime !== bTime) {
+        return bTime - aTime;
+      }
+      // 2. Natural sheet sequence: Sheet 1 OF N before 2 OF N
+      const aMatch = (a.sheet_no || "").match(/^\s*(\d+)/);
+      const bMatch = (b.sheet_no || "").match(/^\s*(\d+)/);
+      const aSheet = aMatch ? parseInt(aMatch[1], 10) : 9999;
+      const bSheet = bMatch ? parseInt(bMatch[1], 10) : 9999;
+      if (aSheet !== bSheet) {
+        return aSheet - bSheet;
+      }
+      // 3. Fallback to drawing number
       const aNum = a.drawing_number || "";
       const bNum = b.drawing_number || "";
       return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });

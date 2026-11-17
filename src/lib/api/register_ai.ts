@@ -247,13 +247,35 @@ export async function getRegisterRows(
   projectId: string,
   registerId: string
 ): Promise<RegisterRow[]> {
-  const res = await apiClient.get<any>(
-    `${BASE}/${projectId}/registers/${registerId}/rows/`
-  );
-  if (res.data && typeof res.data === 'object' && 'results' in res.data) {
-    return res.data.results;
+  let url: string | null = `${BASE}/${projectId}/registers/${registerId}/rows/?pagination=false&page_size=1000`;
+  const all: RegisterRow[] = [];
+  let pageCount = 0;
+  const MAX_PAGES = 50;
+
+  while (url !== null && pageCount < MAX_PAGES) {
+    pageCount++;
+    const res: { data: any } = await apiClient.get<any>(url);
+    const data = res.data;
+    if (Array.isArray(data)) {
+      return data;
+    }
+    if (data && typeof data === 'object' && 'results' in data) {
+      all.push(...(data.results as RegisterRow[]));
+      if (data.next) {
+        try {
+          const parsed = new URL(data.next);
+          url = parsed.pathname + parsed.search;
+        } catch {
+          url = data.next;
+        }
+      } else {
+        url = null;
+      }
+    } else {
+      url = null;
+    }
   }
-  return Array.isArray(res.data) ? res.data : [];
+  return all;
 }
 
 /** Fetch version comparison data */
