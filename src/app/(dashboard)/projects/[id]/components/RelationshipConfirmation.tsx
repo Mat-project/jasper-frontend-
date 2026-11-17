@@ -110,7 +110,9 @@ function getTotalWeight(rel: RelationshipRecord): string {
   const w = rel.extracted_details?.total_weight ?? rel.bbs_files?.[0]?.bbs_metadata?.weight;
   if (!w || w === "None" || w === "null") return "—";
   const num = parseFloat(w);
-  return isNaN(num) ? "—" : `${num.toLocaleString()} kg`;
+  if (isNaN(num)) return "—";
+  const kgVal = (num * 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return `${num.toFixed(3)} T (${kgVal} kg)`;
 }
 
 function isPending(status: string): boolean {
