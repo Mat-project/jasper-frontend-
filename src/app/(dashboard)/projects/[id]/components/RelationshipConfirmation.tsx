@@ -110,9 +110,17 @@ function getTotalWeight(rel: RelationshipRecord): string {
   const w = rel.extracted_details?.total_weight ?? rel.bbs_files?.[0]?.bbs_metadata?.weight;
   if (!w || w === "None" || w === "null") return "—";
   const num = parseFloat(w);
-  if (isNaN(num)) return "—";
-  const kgVal = (num * 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
-  return `${num.toFixed(3)} T (${kgVal} kg)`;
+  if (isNaN(num) || num <= 0) return "—";
+  
+  // Guard for legacy records that stored raw kg (> 50 kg) vs Tonnes (<= 50 T)
+  let tonnes = num;
+  let kg = num * 1000;
+  if (num > 50.0) {
+    tonnes = num / 1000;
+    kg = num;
+  }
+  const kgVal = kg.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return `${tonnes.toFixed(3)} T (${kgVal} kg)`;
 }
 
 function isPending(status: string): boolean {
