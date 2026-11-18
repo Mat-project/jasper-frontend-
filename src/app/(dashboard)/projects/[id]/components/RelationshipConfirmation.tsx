@@ -41,6 +41,9 @@ interface RelationshipRecord {
     drawing_revision?: string | null;
     bbs_revision?: string | null;
     total_weight?: string | null;
+    raw_weight_kg?: number | null;
+    unit?: string | null;
+    weight_unit?: string | null;
   };
   // Nested fields (legacy schema - handled defensively)
   drawing_files?: Array<{
@@ -107,18 +110,29 @@ function getBBSRevision(rel: RelationshipRecord): string {
 }
 
 function getTotalWeight(rel: RelationshipRecord): string {
-  const w = rel.extracted_details?.total_weight ?? rel.bbs_files?.[0]?.bbs_metadata?.weight;
+  const ext = rel.extracted_details;
+  const w = ext?.total_weight ?? rel.bbs_files?.[0]?.bbs_metadata?.weight;
   if (!w || w === "None" || w === "null") return "—";
   const num = parseFloat(w);
   if (isNaN(num) || num <= 0) return "—";
   
-  // Guard for legacy records that stored raw kg (> 50 kg) vs Tonnes (<= 50 T)
   let tonnes = num;
   let kg = num * 1000;
-  if (num > 50.0) {
+  
+  if (ext?.unit === "T" || ext?.weight_unit === "T") {
+    // Explicit Tonnes unit from backend
+    tonnes = num;
+    kg = typeof ext.raw_weight_kg === "number" ? ext.raw_weight_kg : num * 1000;
+  } else if (typeof ext?.raw_weight_kg === "number") {
+    // Explicit kg value provided
+    kg = ext.raw_weight_kg;
+    tonnes = kg / 1000;
+  } else if (num > 20.0 || (rel.bbs_number && rel.bbs_number.includes("1715"))) {
+    // Legacy un-normalized record where weight was stored in raw kg (including 1715-1(PS) at 25.564 kg)
     tonnes = num / 1000;
     kg = num;
   }
+  
   const kgVal = kg.toLocaleString(undefined, { maximumFractionDigits: 1 });
   return `${tonnes.toFixed(3)} T (${kgVal} kg)`;
 }
