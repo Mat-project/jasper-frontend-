@@ -120,17 +120,17 @@ function getTotalWeight(rel: RelationshipRecord): string {
   let kg = num * 1000;
   
   if (ext?.unit === "T" || ext?.weight_unit === "T") {
-    // Explicit Tonnes unit from backend
+    // Explicit Tonnes unit from backend contract
     tonnes = num;
     kg = typeof ext.raw_weight_kg === "number" ? ext.raw_weight_kg : num * 1000;
   } else if (typeof ext?.raw_weight_kg === "number") {
-    // Explicit kg value provided
+    // Explicit raw kg provided by backend
     kg = ext.raw_weight_kg;
     tonnes = kg / 1000;
-  } else if (num > 20.0 || (rel.bbs_number && rel.bbs_number.includes("1715"))) {
-    // Legacy un-normalized record where weight was stored in raw kg (including 1715-1(PS) at 25.564 kg)
-    tonnes = num / 1000;
+  } else if (ext?.unit === "Kg" || ext?.weight_unit === "Kg") {
+    // Explicit Kg unit
     kg = num;
+    tonnes = num / 1000;
   }
   
   const kgVal = kg.toLocaleString(undefined, { maximumFractionDigits: 1 });
