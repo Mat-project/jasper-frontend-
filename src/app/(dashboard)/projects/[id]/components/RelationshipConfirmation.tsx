@@ -234,7 +234,7 @@ export default function RelationshipConfirmation({
       if (sorted && sorted.length > 0) {
         const activeId = activeSubmissionId;
         const match = activeId ? sorted.find((s: any) => s.id === activeId) : null;
-        setSelectedSubmission(match ? match.id : sorted[0].id);
+        setSelectedSubmission((prev) => prev || (match ? match.id : sorted[0].id));
       }
     } catch (err) {
       console.error("Failed to fetch submissions", err);
@@ -271,10 +271,11 @@ export default function RelationshipConfirmation({
   }, [fetchData, fetchSubmissions]);
 
   useEffect(() => {
-    if (!activeSubmissionId || submissions.length === 0) return;
-    const exists = submissions.some((s) => s.id === activeSubmissionId);
-    if (exists && selectedSubmission !== activeSubmissionId) {
-      setSelectedSubmission(activeSubmissionId);
+    if (!selectedSubmission && activeSubmissionId && submissions.length > 0) {
+      const exists = submissions.some((s) => s.id === activeSubmissionId);
+      if (exists) {
+        setSelectedSubmission(activeSubmissionId);
+      }
     }
   }, [activeSubmissionId, submissions, selectedSubmission]);
 
