@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { UploadCloud, CheckCircle2, AlertCircle, X, CloudUpload } from "lucide-react";
+import { UploadCloud, CheckCircle2, AlertCircle, X, CloudUpload, PlusCircle, FolderInput } from "lucide-react";
 import apiClient, { getBaseUrl } from "@/lib/api/client";
 import { dispatchApiError } from "@/components/DiagnosticErrorModal";
+import { useProjectWorkspace } from "../WorkspaceProvider";
 
 /** Safely converts any error value (string, object, Error) to a displayable string */
 function toErrorString(err: unknown): string {
@@ -33,6 +34,10 @@ export default function UploadZIP({
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadStatusText, setUploadStatusText] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [appendToActive, setAppendToActive] = useState<boolean>(true);
+
+  // Retrieve active submission info from shared WorkspaceContext
+  const { activeSubmissionId, activeSubmissionNo } = useProjectWorkspace();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -100,12 +105,14 @@ export default function UploadZIP({
 
         // Step 2B: Confirm upload and trigger Celery processing (with 2 min timeout)
         setUploadStatusText("Confirming upload and starting AI extraction...");
+        const targetSubId = appendToActive && activeSubmissionId ? activeSubmissionId : undefined;
         const completeRes = await apiClient.post(
           `/api/v1/projects/${project.id}/complete-upload/`,
           {
             s3_key: s3_key,
             filename: file.name,
             file_size: file.size,
+            submission_id: targetSubId,
           },
           { timeout: 120_000 }
         );
@@ -119,6 +126,9 @@ export default function UploadZIP({
         setUploadStatusText("Uploading to server...");
         const formData = new FormData();
         formData.append("file", file);
+        if (appendToActive && activeSubmissionId) {
+          formData.append("submission_id", activeSubmissionId);
+        }
 
         const res = await apiClient.post(
           `/api/v1/projects/${project.id}/upload/`,
@@ -234,6 +244,45 @@ export default function UploadZIP({
                 {(file.size / 1024 / 1024).toFixed(2)} MB
               </span>
             </div>
+
+            {/* Destination Mode Selector (when an active submission exists) */}
+            {activeSubmissionNo && (
+              <div className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-700">Submission Assignment:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAppendToActive(true)}
+                    className={`flex items-center gap-2 p-2.5 rounded-lg border text-left transition-all ${
+                      appendToActive
+                        ? "bg-blue-50 border-blue-400 text-blue-900 shadow-xs"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <FolderInput className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold leading-tight">Append to {activeSubmissionNo}</p>
+                      <p className="text-[11px] text-slate-500 leading-tight">Combine into this active draft</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAppendToActive(false)}
+                    className={`flex items-center gap-2 p-2.5 rounded-lg border text-left transition-all ${
+                      !appendToActive
+                        ? "bg-blue-50 border-blue-400 text-blue-900 shadow-xs"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <PlusCircle className="w-4 h-4 text-slate-600 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold leading-tight">Start New Submission</p>
+                      <p className="text-[11px] text-slate-500 leading-tight">Create next SUB sequence</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Live Upload Progress Bar */}
             {uploading && (
