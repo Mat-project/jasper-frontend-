@@ -30,10 +30,17 @@ export default function ActiveSubmissionBanner({
   const activeSubmissionId = workspace.active_submission;
   const activeSubmissionNo = workspace.submission_no;
 
-  // Determine if user is viewing a historical (non-active) submission
+  // Determine if user is viewing a historical (non-active) submission.
+  // Appended sibling ZIPs share the same submission_no, so treat matching submission_no as active.
+  const sameSubmissionNo =
+    Boolean(selectedSubmissionNo) &&
+    Boolean(activeSubmissionNo) &&
+    selectedSubmissionNo === activeSubmissionNo;
+
   const isHistorical =
     selectedSubmissionId &&
     activeSubmissionId &&
+    !sameSubmissionNo &&
     selectedSubmissionId !== activeSubmissionId;
 
   return (
@@ -49,7 +56,7 @@ export default function ActiveSubmissionBanner({
         </div>
 
         {/* Pill showing which submission is currently viewed */}
-        {selectedSubmissionNo && selectedSubmissionId !== activeSubmissionId && (
+        {selectedSubmissionNo && !sameSubmissionNo && selectedSubmissionId !== activeSubmissionId && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700">
             <span className="text-amber-500 font-normal">Viewing</span>
             <span className="font-bold">{selectedSubmissionNo}</span>

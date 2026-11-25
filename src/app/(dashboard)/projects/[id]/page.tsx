@@ -268,24 +268,35 @@ function ProjectDetailsContent({
           <div className="flex items-center gap-3">
 
             <button
+              disabled={!register}
               onClick={async () => {
+                if (!register) return;
                 try {
                   const { exportProjectRegister } = await import("@/lib/api/register_ai");
-                  const blob = await exportProjectRegister(id, register?.id);
+                  const blob = await exportProjectRegister(id, register.id);
                   const url = window.URL.createObjectURL(blob);
                   const a = window.document.createElement("a");
                   a.href = url;
-                  a.download = `${project.code}_register${register ? `_V${register.version_number}` : ""}.xlsx`;
+                  a.download = `${project.code}_register_V${register.version_number}.xlsx`;
                   window.document.body.appendChild(a);
                   a.click();
                   window.document.body.removeChild(a);
                   window.URL.revokeObjectURL(url);
                 } catch (e) {
                   console.error("Export failed", e);
-                  alert("Failed to export register. Please try again.");
                 }
               }}
-              className="px-4 py-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+              title={
+                !register
+                  ? "No register available to export. Upload a ZIP package in 'Upload & Extract' to generate Register V1 first."
+                  : `Export Register V${register.version_number} to Excel`
+              }
+              className={cn(
+                "px-4 py-2 border rounded-lg text-sm font-semibold transition-colors flex items-center gap-2",
+                register
+                  ? "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-700 cursor-pointer"
+                  : "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-75"
+              )}
             >
               <FileSpreadsheet className="h-4 w-4" /> Export Register
             </button>

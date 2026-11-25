@@ -33,6 +33,11 @@ import { getRegisterRows } from "@/lib/api/register_ai";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
 import { cn } from "@/lib/utils";
+import {
+  groupSubmissions,
+  findGroupByPackageId,
+  formatSubmissionGroupOption,
+} from "@/lib/submissionGroups";
 
 interface AttachmentFile {
   name: string;
@@ -110,6 +115,7 @@ export default function TransmittalTab({
 
   // Drawings
   const [drawings, setDrawings] = useState<string[]>([]);
+  const [drawingEntries, setDrawingEntries] = useState<{ pkgId: string; drawingNumber: string }[]>([]);
   const [registerRows, setRegisterRows] = useState<any[]>([]);
   const [activeRegVersion, setActiveRegVersion] = useState("1.0");
   const [isRegisterApproved, setIsRegisterApproved] = useState(false);
@@ -120,9 +126,28 @@ export default function TransmittalTab({
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const submissionGroups = React.useMemo(
+    () => groupSubmissions(submissions, activeSubmissionId),
+    [submissions, activeSubmissionId]
+  );
+  const selectedGroup = React.useMemo(
+    () => findGroupByPackageId(submissionGroups, selectedSubmission),
+    [submissionGroups, selectedSubmission]
+  );
+  const selectedZipIdsKey = selectedGroup ? selectedGroup.zipIds.join(",") : selectedSubmission;
+
   // Derived visible count helper for attachments size calculation
   const visibleRowsCount = selectedSubmission
-    ? registerRows.filter(r => r.zip_package === selectedSubmission).length
+    ? registerRows.filter((r) => {
+        const rowPkg =
+          typeof r.zip_package === "object" && r.zip_package !== null
+            ? r.zip_package.id
+            : r.zip_package;
+        if (selectedGroup) {
+          return selectedGroup.zipIds.includes(String(rowPkg || ""));
+        }
+        return String(rowPkg || "") === String(selectedSubmission);
+      }).length
     : registerRows.length;
 
   // Attachments state - visually representing the active register dynamically
@@ -363,33 +388,46 @@ export default function TransmittalTab({
         const rowsArray = await getRegisterRows(projectId, activeReg.id);
         setRegisterRows(rowsArray);
         
-        // Extract drawing numbers in order, filtered by the selected submission
-        // (ZipPackage), sorted by drawing_number ascending so they appear in
-        // proper sequential order (e.g. B5-025, B5-026, B5-027, ...).
-        const extracted = rowsArray
+        // Extract drawing numbers in order, filtered across all sibling ZIPs in the
+        // selected submission, sorted by drawing_number ascending.
+        const targetZipSet = selectedZipIdsKey
+          ? new Set(selectedZipIdsKey.split(",").filter(Boolean))
+          : new Set(selectedSubmission ? [selectedSubmission] : []);
+
+        const matchedRows = rowsArray
           .filter((row: any) => {
-            const rowPkg = typeof row.zip_package === "object" && row.zip_package !== null 
-              ? row.zip_package.id 
-              : row.zip_package;
-            return row.drawing_number && String(rowPkg || "") === String(selectedSubmission);
+            const rowPkg =
+              typeof row.zip_package === "object" && row.zip_package !== null
+                ? row.zip_package.id
+                : row.zip_package;
+            return row.drawing_number && targetZipSet.has(String(rowPkg || ""));
           })
           .sort((a: any, b: any) => {
             const aNum = a.drawing_number || "";
             const bNum = b.drawing_number || "";
             return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
-          })
-          .map((row: any) => {
-            return `${row.drawing_number}`;
           });
-        
-        setDrawings(extracted);
+
+        const entries = matchedRows.map((row: any) => {
+          const rowPkg =
+            typeof row.zip_package === "object" && row.zip_package !== null
+              ? row.zip_package.id
+              : row.zip_package;
+          return {
+            pkgId: String(rowPkg || ""),
+            drawingNumber: String(row.drawing_number),
+          };
+        });
+
+        setDrawingEntries(entries);
+        setDrawings(entries.map((e: { drawingNumber: string }) => e.drawingNumber));
       }
     } catch (err) {
       console.error("Failed to fetch drawings", err);
     } finally {
       setLoadingDrawings(false);
     }
-  }, [projectId, selectedSubmission]);
+  }, [projectId, selectedSubmission, selectedZipIdsKey]);
 
   // Fetch Register Approval status on mount
   const fetchRegisterStatus = React.useCallback(async () => {
@@ -446,10 +484,6 @@ export default function TransmittalTab({
     if (targetCompany) {
       const contactData = contacts.find(c => c.id.toString() === targetCompany);
       if (contactData) {
-        // Use contact's emails for To, but keep project default CC/BCC
-        setToField(contactData.emails);
-        setCcField(project?.mail_cc || "");
-        setBccField(project?.mail_bcc || "");
         companyName = contactData.company_name;
       }
     }
@@ -457,33 +491,67 @@ export default function TransmittalTab({
     const mailNum = localMailNumber || "MAIL-001";
     setSubjectField(mailNum);
 
-    // ── Use ZIP filename heading instead of project name ──────────
-    // The client wants the descriptive heading from the ZIP filename
-    // to appear in the email body instead of the project name.
+    // ── Use ZIP filename heading(s) instead of project name ───────
+    // When multiple ZIPs belong to the same SUB-xxx, group drawings under each ZIP's heading.
     const selectedSub = submissions.find(s => s.id === selectedSubmission);
-    const heading = selectedSub?.heading || selectedSub?.original_filename || project?.name || "Project";
+    let sectionsText = "";
 
-    let drawingListText = "";
-    if (drawings.length > 0) {
-      drawingListText = drawings.map((dwg, idx) => `${idx + 1}. ${dwg}`).join("\n");
+    if (selectedGroup && selectedGroup.packages.length > 1) {
+      const sections: string[] = [];
+      const coveredPkgIds = new Set<string>();
+
+      for (const pkg of selectedGroup.packages) {
+        coveredPkgIds.add(pkg.id);
+        const pkgHeading = pkg.heading || pkg.original_filename || project?.name || "Project";
+        const pkgDrawings = drawingEntries
+          .filter((entry) => entry.pkgId === pkg.id)
+          .map((entry) => entry.drawingNumber);
+
+        if (pkgDrawings.length > 0) {
+          sections.push(
+            `**${pkgHeading}**\n\n${pkgDrawings.map((dwg, idx) => `${idx + 1}. ${dwg}`).join("\n")}`
+          );
+        }
+      }
+
+      const extraDrawings = drawingEntries
+        .filter((entry) => !coveredPkgIds.has(entry.pkgId))
+        .map((entry) => entry.drawingNumber);
+      if (extraDrawings.length > 0) {
+        sections.push(extraDrawings.map((dwg, idx) => `${idx + 1}. ${dwg}`).join("\n"));
+      }
+
+      if (sections.length > 0) {
+        sectionsText = sections.join("\n\n");
+      } else {
+        const fallbackHeading =
+          selectedGroup.packages[0]?.heading ||
+          selectedGroup.packages[0]?.original_filename ||
+          project?.name ||
+          "Project";
+        sectionsText = `**${fallbackHeading}**\n\n1. [No drawings found in this submission]`;
+      }
     } else {
-      drawingListText = "1. [No drawings found in this submission]";
+      const heading = selectedSub?.heading || selectedSub?.original_filename || project?.name || "Project";
+      const drawingListText =
+        drawings.length > 0
+          ? drawings.map((dwg, idx) => `${idx + 1}. ${dwg}`).join("\n")
+          : "1. [No drawings found in this submission]";
+      sectionsText = `**${heading}**\n\n${drawingListText}`;
     }
 
     const bodyText = `Dear ${companyName},
 
 Please click the link below to download the following drawings.
 
-**${heading}**
-
-${drawingListText}
+${sectionsText}
 
 [Paste Link Here]
 
 Thanks & Regards,`;
 
     setBodyField(bodyText);
-  }, [targetCompany, drawings, localMailNumber, contacts, project, submissions, selectedSubmission]);
+  }, [targetCompany, drawings, drawingEntries, localMailNumber, contacts, project, submissions, selectedSubmission, selectedGroup]);
 
   // Toast Helper
   const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
@@ -497,7 +565,7 @@ Thanks & Regards,`;
       return;
     }
     const subMap = new Map(submissions.map(s => [s.id, s.submission_no]));
-    const submissionNo = subMap.get(selectedSubmission) || "Master";
+    const submissionNo = selectedGroup?.submission_no || subMap.get(selectedSubmission) || "Master";
     
     const headers = [
       "Drawing Number",
@@ -514,7 +582,16 @@ Thanks & Regards,`;
     ];
     
     const targetRows = selectedSubmission
-      ? registerRows.filter(r => r.zip_package === selectedSubmission)
+      ? registerRows.filter((r) => {
+          const rowPkg =
+            typeof r.zip_package === "object" && r.zip_package !== null
+              ? r.zip_package.id
+              : r.zip_package;
+          if (selectedGroup) {
+            return selectedGroup.zipIds.includes(String(rowPkg || ""));
+          }
+          return String(rowPkg || "") === String(selectedSubmission);
+        })
       : registerRows;
       
     if (targetRows.length === 0) {
@@ -609,10 +686,19 @@ Thanks & Regards,`;
   const handleCompanyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const contactId = e.target.value;
     setTargetCompany(contactId);
-    if (!contactId) {
-      setToField("");
-      setSubjectField("");
-      setBodyField("");
+    if (contactId) {
+      const contactData = contacts.find(c => c.id.toString() === contactId);
+      if (contactData) {
+        setToField(contactData.emails || "");
+        if (!ccField && project?.mail_cc) {
+          setCcField(project.mail_cc);
+        }
+        if (!bccField && project?.mail_bcc) {
+          setBccField(project.mail_bcc);
+        }
+      }
+    } else {
+      setToField(project?.mail_to || "");
     }
   };
 
@@ -665,17 +751,21 @@ Thanks & Regards,`;
     }, 10);
   };
 
-  // Selected submission details and sent state
+  // Selected submission details and sent state (check across all sibling ZIPs in submission_no)
   const selectedSubObj = submissions.find((s) => s.id === selectedSubmission);
-  const isSubmissionAlreadySent = Boolean(selectedSubObj?.is_dispatched) || selectedSubObj?.lifecycle_status === "Closed";
+  const isSubmissionAlreadySent =
+    Boolean(selectedGroup ? selectedGroup.is_dispatched : selectedSubObj?.is_dispatched) ||
+    (selectedGroup ? selectedGroup.lifecycle_status : selectedSubObj?.lifecycle_status) === "Closed";
 
   // Form submission
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (isSubmissionAlreadySent) {
+      const sentSubNo = selectedGroup?.submission_no || selectedSubObj?.submission_no;
+      const sentMailRef = selectedGroup?.mail_number || selectedSubObj?.mail_number || "Sent";
       showToast(
-        `Transmittal has already been sent for submission '${selectedSubObj?.submission_no}' (Ref: ${selectedSubObj?.mail_number || "Sent"}). Duplicate sending is prohibited.`,
+        `Transmittal has already been sent for submission '${sentSubNo}' (Ref: ${sentMailRef}). Duplicate sending is prohibited.`,
         "error"
       );
       return;
@@ -686,6 +776,29 @@ Thanks & Regards,`;
 
     if (!cleanTo.trim() || !subjectField.trim() || !bodyField.trim()) {
       showToast("Please fill in valid To, Subject, and Email Body fields.", "error");
+      return;
+    }
+
+    const splitEmails = (str: string) => str.split(/[,;\n]+/).map(e => e.trim()).filter(Boolean);
+    const toList = splitEmails(toField);
+    const ccList = splitEmails(ccField);
+    const bccList = splitEmails(bccField);
+    const totalRecipients = toList.length + ccList.length + bccList.length;
+
+    if (toList.length === 0) {
+      showToast("Please provide at least one valid recipient in the 'To' field.", "error");
+      return;
+    }
+
+    if (totalRecipients > 50) {
+      showToast(`Total recipients (To + Cc + Bcc) cannot exceed 50. Currently ${totalRecipients} entered.`, "error");
+      return;
+    }
+
+    const allEmails = [...toList, ...ccList, ...bccList];
+    const invalidEmail = allEmails.find(email => !email.includes("@"));
+    if (invalidEmail) {
+      showToast(`Invalid email format detected: "${invalidEmail}". Please check your recipient fields.`, "error");
       return;
     }
 
@@ -734,12 +847,13 @@ Thanks & Regards,`;
         }
       }
 
-      // Mark the current submission as sent locally
+      // Mark the current submission (and all sibling ZIPs sharing submission_no) as sent locally
       if (selectedSubmission) {
         const stampedRef = newRef || "SENT";
+        const siblingSet = new Set(selectedGroup ? selectedGroup.zipIds : [selectedSubmission]);
         setSubmissions((prev) =>
           prev.map((s) =>
-            s.id === selectedSubmission
+            siblingSet.has(s.id)
               ? { ...s, mail_number: stampedRef, lifecycle_status: "Closed", is_dispatched: true }
               : s
           )
@@ -778,8 +892,9 @@ Thanks & Regards,`;
 
       {/* Active Submission banner — shared across all tabs */}
       <ActiveSubmissionBanner
-        selectedSubmissionId={selectedSubmission || undefined}
+        selectedSubmissionId={selectedGroup?.primaryId || selectedSubmission || undefined}
         selectedSubmissionNo={
+          selectedGroup?.submission_no ||
           submissions.find((s) => s.id === selectedSubmission)?.submission_no
         }
       />
@@ -872,13 +987,13 @@ Thanks & Regards,`;
                   <div className="text-xs text-rose-500 py-2">No submissions (ZIP uploads) found for this project.</div>
                 ) : (
                   <select
-                    value={selectedSubmission}
+                    value={selectedGroup ? selectedGroup.primaryId : selectedSubmission}
                     onChange={handleSubmissionChange}
                     className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   >
-                    {submissions.map(sub => (
-                      <option key={sub.id} value={sub.id}>
-                        {sub.submission_no || "SUB-New"} - {sub.original_filename} ({new Date(sub.created_at).toLocaleDateString()})
+                    {submissionGroups.map(group => (
+                      <option key={group.key} value={group.primaryId}>
+                        {formatSubmissionGroupOption(group, 60)}
                       </option>
                     ))}
                   </select>

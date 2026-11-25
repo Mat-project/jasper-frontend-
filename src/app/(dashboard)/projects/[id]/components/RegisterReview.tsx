@@ -29,6 +29,11 @@ import { Register, RegisterRow, updateWorkspace } from "@/lib/api/register_ai";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
 import { cn } from "@/lib/utils";
+import {
+  groupSubmissions,
+  findGroupByPackageId,
+  formatSubmissionGroupOption,
+} from "@/lib/submissionGroups";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -189,12 +194,30 @@ export default function RegisterReview({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // visibleRows: filter by submission, then by search query, sorted by drawing_number
+  const effectiveActiveSubmissionId = sharedActiveSubmissionId || activeSubmissionId;
+
+  const submissionGroups = React.useMemo(
+    () => groupSubmissions(submissions, effectiveActiveSubmissionId),
+    [submissions, effectiveActiveSubmissionId]
+  );
+  const selectedGroup = React.useMemo(
+    () => findGroupByPackageId(submissionGroups, selectedSubmission),
+    [submissionGroups, selectedSubmission]
+  );
+  const activeGroup = React.useMemo(
+    () => findGroupByPackageId(submissionGroups, effectiveActiveSubmissionId),
+    [submissionGroups, effectiveActiveSubmissionId]
+  );
+
+  // visibleRows: filter by submission group (all sibling ZIPs sharing submission_no), then by search query
   const baseRows = selectedSubmission
     ? editableRows.filter((r) => {
         const rowPkg = typeof r.zip_package === "object" && r.zip_package !== null 
           ? (r.zip_package as any).id 
           : r.zip_package;
+        if (selectedGroup) {
+          return selectedGroup.zipIds.includes(String(rowPkg || ""));
+        }
         return String(rowPkg || "") === String(selectedSubmission);
       })
     : editableRows;
@@ -241,8 +264,10 @@ export default function RegisterReview({
       return aNum.localeCompare(bNum, undefined, { numeric: true, sensitivity: "base" });
     });
 
-  const effectiveActiveSubmissionId = sharedActiveSubmissionId || activeSubmissionId;
-  const isReadOnly = selectedSubmission !== effectiveActiveSubmissionId;
+  const isReadOnly =
+    activeGroup && selectedGroup
+      ? activeGroup.key !== selectedGroup.key
+      : selectedSubmission !== effectiveActiveSubmissionId;
 
   const allExceptions = register.validation_report?.exceptions ?? [];
   const filteredExceptions = selectedSubmission
@@ -506,8 +531,11 @@ export default function RegisterReview({
   return (
     <div className="space-y-4">
       <ActiveSubmissionBanner
-        selectedSubmissionId={selectedSubmission || undefined}
-        selectedSubmissionNo={submissions.find((s) => s.id === selectedSubmission)?.submission_no}
+        selectedSubmissionId={selectedGroup?.primaryId || selectedSubmission || undefined}
+        selectedSubmissionNo={
+          selectedGroup?.submission_no ||
+          submissions.find((s) => s.id === selectedSubmission)?.submission_no
+        }
       />
 
       {/* ── Optional Verification Badge (Non-blocking) ── */}
@@ -807,22 +835,16 @@ export default function RegisterReview({
           <div className="flex items-center gap-2 shrink-0">
             {/* Submission Filter */}
             <select
-              value={selectedSubmission}
+              value={selectedGroup ? selectedGroup.primaryId : selectedSubmission}
               onChange={(e) => setSelectedSubmission(e.target.value)}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-medium outline-none cursor-pointer focus:border-blue-400 focus:ring-1 focus:ring-blue-400 max-w-[220px] truncate"
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-medium outline-none cursor-pointer focus:border-blue-400 focus:ring-1 focus:ring-blue-400 max-w-[260px] truncate"
             >
               <option value="">All Submissions</option>
-              {submissions.map((sub) => {
-                const fname =
-                  sub.original_filename.length > 28
-                    ? sub.original_filename.substring(0, 25) + "..."
-                    : sub.original_filename;
-                return (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.submission_no} — {fname}
-                  </option>
-                );
-              })}
+              {submissionGroups.map((group) => (
+                <option key={group.key} value={group.primaryId}>
+                  {formatSubmissionGroupOption(group, 28)}
+                </option>
+              ))}
             </select>
 
             {/* Row count */}

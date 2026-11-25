@@ -24,6 +24,11 @@ import {
 } from "@/lib/api/register_ai";
 import ActiveSubmissionBanner from "./ActiveSubmissionBanner";
 import { useProjectWorkspace } from "../WorkspaceProvider";
+import {
+  groupSubmissions,
+  findGroupByPackageId,
+  formatSubmissionGroupOption,
+} from "@/lib/submissionGroups";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -291,8 +296,23 @@ export default function RelationshipConfirmation({
   }, [projectId]);
 
   // ── Derived state ───────────────────────────────────────────────────────────
+  const submissionGroups = React.useMemo(
+    () => groupSubmissions(submissions, activeSubmissionId),
+    [submissions, activeSubmissionId]
+  );
+  const selectedGroup = React.useMemo(
+    () => findGroupByPackageId(submissionGroups, selectedSubmission),
+    [submissionGroups, selectedSubmission]
+  );
+
   const filteredRelationships = relationships
-    .filter((r) => !selectedSubmission || r.zip_package === selectedSubmission)
+    .filter((r) => {
+      if (!selectedSubmission) return true;
+      if (selectedGroup) {
+        return r.zip_package ? selectedGroup.zipIds.includes(String(r.zip_package)) : false;
+      }
+      return r.zip_package === selectedSubmission;
+    })
     .slice()
     .sort((a, b) => {
       const aNum = a.drawing_number || "";
@@ -601,8 +621,9 @@ export default function RelationshipConfirmation({
   return (
     <div className="space-y-4">
       <ActiveSubmissionBanner
-        selectedSubmissionId={selectedSubmission || undefined}
+        selectedSubmissionId={selectedGroup?.primaryId || selectedSubmission || undefined}
         selectedSubmissionNo={
+          selectedGroup?.submission_no ||
           submissions.find((s) => s.id === selectedSubmission)?.submission_no
         }
       />
@@ -643,21 +664,16 @@ export default function RelationshipConfirmation({
       <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-2">
         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Submission (ZIP Batch)</label>
         <select
-          value={selectedSubmission}
+          value={selectedGroup ? selectedGroup.primaryId : selectedSubmission}
           onChange={(e) => setSelectedSubmission(e.target.value)}
           className="w-full px-3.5 py-2.5 bg-white border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 rounded-lg text-sm text-slate-800 font-medium transition-all shadow-sm outline-none cursor-pointer truncate max-w-full"
         >
           <option value="">-- All Submissions --</option>
-          {submissions.map((sub) => {
-            const fname = sub.original_filename.length > 50 
-              ? sub.original_filename.substring(0, 47) + "..." 
-              : sub.original_filename;
-            return (
-              <option key={sub.id} value={sub.id}>
-                {sub.submission_no} - {fname} ({new Date(sub.created_at).toLocaleDateString()})
-              </option>
-            );
-          })}
+          {submissionGroups.map((group) => (
+            <option key={group.key} value={group.primaryId}>
+              {formatSubmissionGroupOption(group, 50)}
+            </option>
+          ))}
         </select>
       </div>
 
